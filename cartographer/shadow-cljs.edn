@@ -1,0 +1,19 @@
+;; shadow-cljs configuration
+{:source-paths
+ ["src/dev"
+  "src/main"
+  "src/test"]
+
+ :dependencies
+ [[reagent "1.1.0"]]
+
+ :dev-http {8001 "public"}
+
+ :builds
+ {:app                             ;; name of build
+  {:target :browser                 ;; target the browser
+   :output-dir "public/app/js"      ;; output js files here
+   :asset-path "/app/js"            ;; used to construct the URL
+   :modules {:main                  ;; we need one module
+              ;; call the fn under the var when the JS loads
+             {:init-fn cartographer.app/init}}}}}
