@@ -4,22 +4,17 @@ pragma solidity 0.8.13;
 import {EmapLike} from "./EmapLike.sol";
 
 contract Emap is EmapLike {
-    uint256 objNonce;
+    uint256 nonce;
     mapping(bytes32 => bytes) public get;
     mapping(bytes32 => Key[]) public getKeys;
 
-    function getNonce() external returns (bytes32 n) {
-        n = keccak256(abi.encodePacked(objNonce++, block.chainid));
+    function getMapId() external returns (bytes32) {
+        return keccak256(abi.encodePacked(msg.sender, block.chainid, nonce++));
     }
 
-    function set(bytes32 nonce, bytes24 key, uint8 typ, bytes calldata value)
-        external
-        returns (bytes32 mapId, bytes32 physicalKey)
-    {
-        mapId = keccak256(abi.encodePacked(msg.sender, nonce));
-        physicalKey = keccak256(abi.encodePacked(mapId, key));
-        get[physicalKey] = value;
-        getKeys[mapId].push(Key({typ: typ, key: key, mapId: mapId, physicalKey: physicalKey}));
-        emit Set(msg.sender, mapId, key, physicalKey, value, nonce, typ);
+    function set(bytes32 mapId, bytes24 key, uint8 typ, bytes calldata value) external {
+        get[keccak256(abi.encodePacked(mapId, key))] = value;
+        getKeys[mapId].push(Key({mapId: mapId, key: key, typ: typ}));
+        emit Set(msg.sender, mapId, key, typ, value);
     }
 }

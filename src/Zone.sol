@@ -6,6 +6,7 @@ import {EmapLike} from "./EmapLike.sol";
 import {ZoneLike} from "./ZoneLike.sol";
 import {AppraiserLike} from "./AppraiserLike.sol";
 
+// expo: encoding is a mess, think of something
 contract Zone is ZoneLike {
     uint256 public constant LOCK = 1;
     // If FREQ was too low, zone buyer could be too late and frontrunned upon assuming a name ownership
@@ -61,22 +62,18 @@ contract Zone is ZoneLike {
         DmapLike(DMAP).set(name, meta, data);
     }
 
-    function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value)
-        external
-        returns (bytes32, bytes32, bytes32)
-    {
+    function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value) external returns (bytes32 mapId) {
         require(owners[name] == msg.sender, "ERR_OWNER");
         bytes32 slot = keccak256(abi.encode(address(this), name));
-        (bytes32 meta, bytes32 nonce) = DmapLike(DMAP).get(slot);
+        bytes32 meta;
+        (meta, mapId) = DmapLike(DMAP).get(slot);
         require(uint256(meta) & 1 != LOCK, "ERR_LOCKED");
-        // Set Dmap upon empty nonce
-        bool empty = nonce == bytes32(0);
-        if (empty) {
-            nonce = bytes32(EmapLike(EMAP).getNonce());
-            set(name, meta, nonce);
+        // set Dmap upon empty nonce
+        if (mapId == bytes32(0)) {
+            mapId = EmapLike(EMAP).getMapId();
+            set(name, meta, mapId);
         }
-        (bytes32 mapId, bytes32 physicalKey) = EmapLike(EMAP).set(nonce, key, typ, value);
-        return (nonce, mapId, physicalKey);
+        EmapLike(EMAP).set(mapId, key, typ, value);
     }
 
     function abdicate(uint256 param) external {
