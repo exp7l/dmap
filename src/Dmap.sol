@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.13;
 
-contract _dmap_ {
+contract Dmap {
     uint256 constant LOCK = 0x1;
 
     constructor(address rootzone) {

@@ -21,9 +21,6 @@ contract Zone is ZoneLike {
     mapping(bytes32 => uint256) public commitments;
     mapping(uint256 => bool) public abdicated;
 
-    event Abdicate(uint256 indexed param);
-    event Configure(uint256 indexed param, address indexed data);
-
     constructor(address g, address a, address e, uint256 f) {
         gov = g;
         appraiser = a;
@@ -42,10 +39,12 @@ contract Zone is ZoneLike {
 
     function assume(bytes32 salt, string calldata plain) external {
         bytes32 name = keccak256(abi.encodePacked(plain));
+        // bytes32 name = keccak256(abi.encode(plain));
         require(owners[name] == address(0), "ERR_TAKEN");
         bytes32 comm = keccak256(abi.encode(salt, name, msg.sender));
         // appraiser can be used by gov to price names and even revert upon new name registrations
-        require(commitments[comm] >= AppraiserLike(appraiser).appraise(plain), "ERR_PAYMENT");
+        uint256 appraisal = AppraiserLike(appraiser).appraise(plain, abi.encode(msg.sender));
+        require(commitments[comm] >= appraisal, "ERR_PAYMENT");
         commitments[comm] = 0;
         owners[name] = msg.sender;
         emit Assume(name, plain);
@@ -62,7 +61,10 @@ contract Zone is ZoneLike {
         DmapLike(DMAP).set(name, meta, data);
     }
 
-    function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value) external {
+    function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value)
+        external
+        returns (bytes32, bytes32, bytes32)
+    {
         require(owners[name] == msg.sender, "ERR_OWNER");
         bytes32 slot = keccak256(abi.encode(address(this), name));
         (bytes32 meta, bytes32 nonce) = DmapLike(DMAP).get(slot);
@@ -73,7 +75,8 @@ contract Zone is ZoneLike {
             nonce = bytes32(EmapLike(EMAP).getNonce());
             set(name, meta, nonce);
         }
-        EmapLike(EMAP).set(nonce, key, typ, value);
+        (bytes32 mapId, bytes32 physicalKey) = EmapLike(EMAP).set(nonce, key, typ, value);
+        return (nonce, mapId, physicalKey);
     }
 
     function abdicate(uint256 param) external {

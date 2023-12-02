@@ -6,17 +6,20 @@ import {EmapLike} from "./EmapLike.sol";
 contract Emap is EmapLike {
     uint256 objNonce;
     mapping(bytes32 => bytes) public get;
-    mapping(bytes32 => LogicalKey[]) public getKeys;
+    mapping(bytes32 => Key[]) public getKeys;
 
     function getNonce() external returns (bytes32 n) {
         n = keccak256(abi.encodePacked(objNonce++, block.chainid));
     }
 
-    function set(bytes32 nonce, bytes24 key, uint8 typ, bytes calldata value) external {
-        bytes32 mapId = keccak256(abi.encodePacked(msg.sender, nonce));
-        bytes32 physicalKey = keccak256(abi.encodePacked(mapId, key));
+    function set(bytes32 nonce, bytes24 key, uint8 typ, bytes calldata value)
+        external
+        returns (bytes32 mapId, bytes32 physicalKey)
+    {
+        mapId = keccak256(abi.encodePacked(msg.sender, nonce));
+        physicalKey = keccak256(abi.encodePacked(mapId, key));
         get[physicalKey] = value;
-        getKeys[mapId].push(LogicalKey({typ: typ, key: key}));
-        emit Set(msg.sender, nonce, key, value);
+        getKeys[mapId].push(Key({typ: typ, key: key, mapId: mapId, physicalKey: physicalKey}));
+        emit Set(msg.sender, mapId, key, physicalKey, value, nonce, typ);
     }
 }
