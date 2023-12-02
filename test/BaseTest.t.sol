@@ -6,7 +6,7 @@ import {AppraiserFree} from "../src/AppraiserFree.sol";
 import {AppraiserRoot} from "../src/AppraiserRoot.sol";
 import {DmapLike} from "../src/DmapLike.sol";
 import {Dmap} from "../src/Dmap.sol";
-import {EmapLike} from "../src/EmapLike.sol";
+import {EmapLike, Key} from "../src/EmapLike.sol";
 import {Emap} from "../src/Emap.sol";
 import {ZoneLike} from "../src/ZoneLike.sol";
 import {Zone} from "../src/Zone.sol";
