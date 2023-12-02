@@ -35,5 +35,4 @@ contract BaseTest {
         root.assume(bytes32(uint256(42)), plain);
         root.set(name, bytes32(uint256(1)), bytes32(bytes20(address(free))));
     }
-
 }

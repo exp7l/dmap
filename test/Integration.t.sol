@@ -7,10 +7,11 @@ import {ZoneLike} from "../src/ZoneLike.sol";
 
 contract IntegrationTest is Test, BaseTest {
     function test_SetKey() public {
-        string memory namePlain = "vitalik"; // :free:vitalik
-        free.assume(bytes32(uint256(426942)), namePlain); // salt does not matter because appraisal is 0
+        // :free:vitalik
+        string memory namePlain = "vitalik";
+        // salt does not matter because appraisal is 0
+        free.assume(bytes32(uint256(426942)), namePlain);
         string memory keyPlain = "primary-wallet";
-        // note the use of abi.encode, so the consumer of `value` can easily decode as `encode` may be "more standardized"
         bytes memory expectedValue = abi.encode(address(0x696969));
 
         // IMPORTANT

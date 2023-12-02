@@ -8,11 +8,11 @@ import {AppraiserLike} from "./AppraiserLike.sol";
 
 contract Zone is ZoneLike {
     uint256 public constant LOCK = 1;
-    // If FREQ was too low, zone buyer could be too late and frontrunned upon assuming a name ownership
+    // if FREQ was too low, zone buyer could be too late and frontrunned upon assuming a name ownership
     uint256 public immutable FREQ;
     address public immutable EMAP;
     // RootZone and Dmap have circular dependency
-    // So let DMAP be configured only once and de facto immutable
+    // so let DMAP be configured only once and de facto immutable
     address public DMAP;
     address public appraiser;
     address public gov;
@@ -85,8 +85,8 @@ contract Zone is ZoneLike {
     function configure(uint256 param, address addr) external {
         require(msg.sender == gov, "ERR_GOV");
         require(!abdicated[param], "ERR_ABDICATED");
-        // Only appraiser is configurable not counting gov itself
-        // Keep this contract object credibly neutral
+        // only appraiser is configurable not counting gov itself
+        // keep this contract object credibly neutral
         if (param == 1) {
             gov = addr;
         } else if (param == 2) {
