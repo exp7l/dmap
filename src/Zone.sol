@@ -6,7 +6,6 @@ import {EmapLike} from "./EmapLike.sol";
 import {ZoneLike} from "./ZoneLike.sol";
 import {AppraiserLike} from "./AppraiserLike.sol";
 
-// expo: encoding is a mess, think of something
 contract Zone is ZoneLike {
     uint256 public constant LOCK = 1;
     // If FREQ was too low, zone buyer could be too late and frontrunned upon assuming a name ownership
@@ -39,9 +38,10 @@ contract Zone is ZoneLike {
     }
 
     function assume(bytes32 salt, string calldata plain) external {
-        bytes32 name = keccak256(abi.encodePacked(plain));
-        // bytes32 name = keccak256(abi.encode(plain));
+        bytes32 name = keccak256(abi.encode(plain));
         require(owners[name] == address(0), "ERR_TAKEN");
+        // abi.encodePacked is ambiguous so there is no decoding function!
+        // https://docs.soliditylang.org/en/v0.8.13/abi-spec.html?highlight=abi.encodePacked#non-standard-packed-mode
         bytes32 comm = keccak256(abi.encode(salt, name, msg.sender));
         // appraiser can be used by gov to price names and even revert upon new name registrations
         uint256 appraisal = AppraiserLike(appraiser).appraise(plain, abi.encode(msg.sender));

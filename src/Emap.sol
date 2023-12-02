@@ -9,11 +9,11 @@ contract Emap is EmapLike {
     mapping(bytes32 => Key[]) public getKeys;
 
     function getMapId() external returns (bytes32) {
-        return keccak256(abi.encodePacked(msg.sender, block.chainid, nonce++));
+        return keccak256(abi.encode(msg.sender, block.chainid, nonce++));
     }
 
     function set(bytes32 mapId, bytes24 key, uint8 typ, bytes calldata value) external {
-        get[keccak256(abi.encodePacked(mapId, key))] = value;
+        get[keccak256(abi.encode(mapId, key))] = value;
         getKeys[mapId].push(Key({mapId: mapId, key: key, typ: typ}));
         emit Set(msg.sender, mapId, key, typ, value);
     }

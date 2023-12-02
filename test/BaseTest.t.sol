@@ -31,7 +31,7 @@ contract BaseTest {
         free.configure(3, address(dmap));
         // set (and lock) the free zone under the root zone
         string memory plain = "free";
-        bytes32 name = keccak256(abi.encodePacked(plain));
+        bytes32 name = keccak256(abi.encode(plain));
         root.assume(bytes32(uint256(42)), plain);
         root.set(name, bytes32(uint256(1)), bytes32(bytes20(address(free))));
     }

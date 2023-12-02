@@ -16,7 +16,7 @@ contract IntegrationTest is Test, BaseTest {
         // IMPORTANT
         bytes32 mapId = _setKey(free, namePlain, keyPlain, expectedValue);
 
-        bytes32 physicalKey = keccak256(abi.encodePacked(mapId, _key(keyPlain)));
+        bytes32 physicalKey = keccak256(abi.encode(mapId, _key(keyPlain)));
         require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue));
     }
 
@@ -24,12 +24,12 @@ contract IntegrationTest is Test, BaseTest {
         internal
         returns (bytes32 mapId)
     {
-        bytes32 name = keccak256(abi.encodePacked(namePlain));
+        bytes32 name = keccak256(abi.encode(namePlain));
         bytes24 key = _key(keyPlain);
         mapId = zone.setKey(name, key, 4, value); // for typ tag, see EmapLike.sol
     }
 
     function _key(string memory keyPlain) internal pure returns (bytes24 key) {
-        key = bytes24(abi.encodePacked(keyPlain));
+        key = bytes24(abi.encode(keyPlain));
     }
 }
