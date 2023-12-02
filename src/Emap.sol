@@ -8,11 +8,11 @@ contract Emap is EmapLike {
     mapping(bytes32 => bytes) public get;
     mapping(bytes32 => LogicalKey[]) public getKeys;
 
-    function getNonce() external returns (uint256 n) {
-        n = ++objNonce;
+    function getNonce() external returns (bytes32 n) {
+        n = keccak256(abi.encodePacked(objNonce++, block.chainid));
     }
 
-    function set(uint256 nonce, bytes24 key, uint8 typ, bytes calldata value) external {
+    function set(bytes32 nonce, bytes24 key, uint8 typ, bytes calldata value) external {
         bytes32 mapId = keccak256(abi.encodePacked(msg.sender, nonce));
         bytes32 physicalKey = keccak256(abi.encodePacked(mapId, key));
         get[physicalKey] = value;

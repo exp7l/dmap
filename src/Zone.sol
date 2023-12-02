@@ -73,7 +73,7 @@ contract Zone is ZoneLike {
             nonce = bytes32(EmapLike(EMAP).getNonce());
             set(name, meta, nonce);
         }
-        EmapLike(EMAP).set(uint256(nonce), key, typ, value);
+        EmapLike(EMAP).set(nonce, key, typ, value);
     }
 
     function abdicate(uint256 param) external {

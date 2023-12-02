@@ -16,9 +16,9 @@ interface EmapLike {
         bytes24 key;
     }
 
-    event Set(address indexed zone, uint256 indexed nonce, bytes24 indexed logicalKey, bytes value);
+    event Set(address indexed zone, bytes32 indexed nonce, bytes24 indexed logicalKey, bytes value);
 
-    function getNonce() external returns (uint256 n);
+    function getNonce() external returns (bytes32 n);
 
-    function set(uint256 _nonce, bytes24 logicalKey, uint8 typ, bytes calldata value) external;
+    function set(bytes32 nonce, bytes24 logicalKey, uint8 typ, bytes calldata value) external;
 }
