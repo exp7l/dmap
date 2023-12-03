@@ -3,6 +3,7 @@ pragma solidity 0.8.13;
 
 import {EmapLike, Key} from "./EmapLike.sol";
 
+// Elastic Map
 contract Emap is EmapLike {
     uint256 nonce;
     mapping(bytes32 => bytes) public get;
