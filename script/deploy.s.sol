@@ -8,7 +8,7 @@ contract Deployer is Script, Setup {
     function run() external {
         string memory m = vm.envString("SEEDPHRASE");
         uint256 sk = vm.deriveKey(m, 0);
-        address gov = vm.envString("GOV");
+        address gov = vm.envAddress("GOV");
         vm.startBroadcast(sk);
         _setUp(gov);
         vm.stopBroadcast();
