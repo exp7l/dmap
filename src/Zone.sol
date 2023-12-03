@@ -20,10 +20,10 @@ contract Zone is ZoneLike {
     mapping(bytes32 => address) public owners;
     mapping(bytes32 => uint256) public commitments;
     mapping(uint256 => bool) public abdicated;
-    string name;
+    string objectName;
 
-    constructor(string memory _name, address _gov, address _appraiser, address _emap, uint256 _freq) {
-        name = _name;
+    constructor(string memory _objectName, address _gov, address _appraiser, address _emap, uint256 _freq) {
+        objectName = _objectName;
         gov = _gov;
         appraiser = _appraiser;
         EMAP = _emap;
