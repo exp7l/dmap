@@ -2,22 +2,26 @@
 pragma solidity 0.8.13;
 
 import "forge-std/Test.sol";
-import {BaseTest, Key} from "./BaseTest.t.sol";
+import {Setup, Key} from "../util/Setup.sol";
 import {ZoneLike} from "../src/ZoneLike.sol";
 
-contract IntegrationTest is Test, BaseTest {
+contract IntegrationTest is Test, Setup {
+    function setUp() public {
+        _setUp(address(this));
+    }
+
     function test_SetKey() public {
         ///// definitions /////
         // :free:vitalik
         string memory namePlain = "vitalik";
         // salt does not matter because appraisal is 0
-        free.assume(bytes32(uint256(426942)), namePlain);
+        freezone.assume(bytes32(uint256(426942)), namePlain);
         string memory keyPlain = "primary-wallet";
         bytes memory expectedValue = abi.encode("abc");
         uint8 typ = 7;
 
         ///// free.set 1 /////
-        bytes32 mapId = _setKey(free, namePlain, keyPlain, typ, expectedValue);
+        bytes32 mapId = _setKey(freezone, namePlain, keyPlain, typ, expectedValue);
 
         bytes32 physicalKey = keccak256(abi.encode(mapId, _key(keyPlain)));
         require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue));
@@ -28,13 +32,13 @@ contract IntegrationTest is Test, BaseTest {
         require(keys[0].key == _key(keyPlain));
 
         bytes32 name = keccak256(abi.encode(namePlain));
-        bytes32 slot = keccak256(abi.encode(address(free), name));
+        bytes32 slot = keccak256(abi.encode(address(freezone), name));
         (bytes32 meta, bytes32 data) = dmap.get(slot);
         require(data == mapId);
 
         ///// free.set 2 /////
         bytes memory expectedValue2 = abi.encode("bcd");
-        _setKey(free, namePlain, keyPlain, typ, expectedValue2);
+        _setKey(freezone, namePlain, keyPlain, typ, expectedValue2);
         require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue2));
         keys = emap.getKeys(mapId);
         require(keys.length == 2);
@@ -47,29 +51,29 @@ contract IntegrationTest is Test, BaseTest {
 
         ///// free.set 3 (lock) /////
         bytes32 LOCK = bytes32(uint256(1));
-        free.set(name, LOCK, mapId);
+        freezone.set(name, LOCK, mapId);
 
         ///// revert on set after lock /////
         vm.expectRevert(bytes("ERR_LOCKED"));
-        _setKey(free, namePlain, keyPlain, typ, expectedValue2);
+        _setKey(freezone, namePlain, keyPlain, typ, expectedValue2);
     }
 
     function test_setKeyOwnership() external {
         ///// definitions /////
         string memory namePlain = "vitalik";
-        free.assume(bytes32(uint256(426942)), namePlain);
+        freezone.assume(bytes32(uint256(426942)), namePlain);
         string memory keyPlain = "primary-wallet";
         bytes memory expectedValue = abi.encode("abc");
         uint8 typ = 7;
-        bytes32 mapId = _setKey(free, namePlain, keyPlain, typ, expectedValue);
+        bytes32 mapId = _setKey(freezone, namePlain, keyPlain, typ, expectedValue);
 
         ///// only registry is allowed to set emap /////
-        require(emap.owners(mapId) == address(free));
+        require(emap.owners(mapId) == address(freezone));
 
         vm.expectRevert(bytes("ERR_OWNER"));
         emap.set(mapId, _key(keyPlain), typ, expectedValue);
-        
-        vm.prank(address(free));
+
+        vm.prank(address(freezone));
         emap.set(mapId, _key(keyPlain), typ, expectedValue);
     }
 

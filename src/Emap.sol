@@ -12,13 +12,13 @@ contract Emap is EmapLike {
     mapping(uint256 => string) public typeAnnotations;
 
     constructor() {
-        typeAnnotations[1] = "bool";
-        typeAnnotations[2] = "uint256";
-        typeAnnotations[3] = "int256";
-        typeAnnotations[4] = "address";
-        typeAnnotations[5] = "bytes32";
-        typeAnnotations[6] = "bytes";
-        typeAnnotations[7] = "string";
+        typeAnnotations[0] = "bool";
+        typeAnnotations[1] = "uint256";
+        typeAnnotations[2] = "int256";
+        typeAnnotations[3] = "address";
+        typeAnnotations[4] = "bytes32";
+        typeAnnotations[5] = "bytes";
+        typeAnnotations[6] = "string";
     }
 
     function getMapId() external returns (bytes32 mapId) {

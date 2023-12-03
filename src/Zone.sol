@@ -20,12 +20,14 @@ contract Zone is ZoneLike {
     mapping(bytes32 => address) public owners;
     mapping(bytes32 => uint256) public commitments;
     mapping(uint256 => bool) public abdicated;
+    string name;
 
-    constructor(address g, address a, address e, uint256 f) {
-        gov = g;
-        appraiser = a;
-        EMAP = e;
-        FREQ = f;
+    constructor(string memory _name, address _gov, address _appraiser, address _emap, uint256 _freq) {
+        name = _name;
+        gov = _gov;
+        appraiser = _appraiser;
+        EMAP = _emap;
+        FREQ = _freq;
     }
 
     function commit(bytes32 comm) external payable {
