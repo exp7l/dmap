@@ -54,6 +54,25 @@ contract IntegrationTest is Test, BaseTest {
         _setKey(free, namePlain, keyPlain, typ, expectedValue2);
     }
 
+    function test_setKeyOwnership() external {
+        ///// definitions /////
+        string memory namePlain = "vitalik";
+        free.assume(bytes32(uint256(426942)), namePlain);
+        string memory keyPlain = "primary-wallet";
+        bytes memory expectedValue = abi.encode("abc");
+        uint8 typ = 7;
+        bytes32 mapId = _setKey(free, namePlain, keyPlain, typ, expectedValue);
+
+        ///// only registry is allowed to set emap /////
+        require(emap.owners(mapId) == address(free));
+
+        vm.expectRevert(bytes("ERR_OWNER"));
+        emap.set(mapId, _key(keyPlain), typ, expectedValue);
+        
+        vm.prank(address(free));
+        emap.set(mapId, _key(keyPlain), typ, expectedValue);
+    }
+
     function _setKey(ZoneLike zone, string memory namePlain, string memory keyPlain, uint8 typ, bytes memory value)
         internal
         returns (bytes32 mapId)
