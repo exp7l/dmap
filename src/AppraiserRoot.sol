@@ -2,6 +2,8 @@
 pragma solidity 0.8.13;
 
 contract AppraiserRoot {
+    event Yield(address indexed current, address indexed next);
+
     address gov;
 
     constructor() {
@@ -14,5 +16,12 @@ contract AppraiserRoot {
         } else {
             return 100e18;
         }
+    }
+    
+    function yield(address next) external {
+        require(msg.sender == gov, "ERR_GOV");
+        address _gov = gov;
+        gov = next;
+        emit Yield(_gov, next);
     }
 }
