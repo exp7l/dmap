@@ -22,7 +22,7 @@ contract Setup {
     bytes32 constant LOCK = bytes32(uint256(1));
     bytes32 constant SALT = bytes32(uint256(42));
     uint256 constant FREQ = 120;
-    uint8 ADDR_TYP = 3;
+    uint8 DMAP_PARAM = 3;
 
     function _setUp(address gov) internal {
         bytes32 name;
@@ -38,11 +38,11 @@ contract Setup {
 
         // deploy dmap
         dmap = DmapLike(address(new Dmap(address(rootzone))));
-        rootzone.configure(ADDR_TYP, address(dmap));
+        rootzone.configure(DMAP_PARAM, address(dmap));
 
         // deploy TLD dmpzone
         dappzone = ZoneLike(address(new Zone("dappzone", gov, address(appraiserRoot), address(emap), FREQ)));
-        dappzone.configure(ADDR_TYP, address(dmap));
+        dappzone.configure(DMAP_PARAM, address(dmap));
 
         // set and lock the dmapzone under the rootzone
         plain = "dapp";
@@ -53,7 +53,7 @@ contract Setup {
 
         // deploy freezone
         freezone = ZoneLike(address(new Zone("freezone", gov, address(appraiserFree), address(emap), FREQ)));
-        freezone.configure(ADDR_TYP, address(dmap));
+        freezone.configure(DMAP_PARAM, address(dmap));
 
         // set and lock the freezone under the dmpzone
         plain = "free";
