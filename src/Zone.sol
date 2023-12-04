@@ -72,9 +72,10 @@ contract Zone is ZoneLike {
         require(uint256(meta) & 1 != LOCK, "ERR_LOCKED");
         // set Dmap slot if it is empty
         if (mapId == bytes32(0)) {
+            mapId = EmapLike(EMAP).getMapId();
             uint256 refFlag = 1 << 1;
             uint256 emap = uint160(EMAP) << 8;
-            set(name, bytes32(emap & refFlag), EmapLike(EMAP).getMapId());
+            set(name, bytes32(emap | refFlag), mapId);
         }
         EmapLike(EMAP).set(mapId, key, typ, value);
     }
