@@ -50,7 +50,6 @@ contract IntegrationTest is Test, Setup {
         require(keys[1].key == _key(keyPlain));
 
         ///// free.set 3 (lock) /////
-        bytes32 LOCK = bytes32(uint256(1));
         freezone.set(name, LOCK, mapId);
 
         ///// revert on set after lock /////
