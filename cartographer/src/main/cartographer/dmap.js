@@ -2,7 +2,8 @@ const kek = require('js-sha3')
 const ebnf = require('ebnf')
 const { defaultAbiCoder } = require('@ethersproject/abi')
 
-const dmap_address = "0x73A2b15BdfA634C66488d8d34389c3e74d1989B8"
+// const dmap_address = "0x73A2b15BdfA634C66488d8d34389c3e74d1989B8"
+const dmap_address = "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"
 
 const fail = s => { throw new Error(s) }
 const need = (b, s) => b || fail(s)
@@ -148,7 +149,6 @@ lib.get = async (dmap, slot) => {
 }
 
 lib.getByZoneAndName = async (dmap, zone, name) => {
-    console.log("getByZoneAndName:", dmap, zone, name)
     const nameAbi = defaultAbiCoder.encode(["string"], [name])
     const hash = keccak256(nameAbi)
     const slot = keccak256(encodeZoneAndName(zone, hash));
@@ -168,29 +168,7 @@ lib.slot = async (dmap, slot) => {
     return val
 }
 
-
 lib.walk = async (dmap, path) => {
-    if (path.length > 0 && ![':', '.'].includes(path.charAt(0))) path = ':' + path
-    let [meta, data] = await lib.get(dmap, '0x' + '00'.repeat(32))
-    let ctx = { locked: path.charAt(0) === ':' }
-    for (const step of lib.parse(path)) {
-        zone = data.slice(0, 21 * 2)
-        if (zone === '0x' + '00'.repeat(20)) {
-            fail(`zero register`)
-        }
-        const fullname = '0x' + lib._strToHex(step.name) + '00'.repeat(32 - step.name.length);
-        [meta, data] = await lib.getByZoneAndName(dmap, zone, fullname)
-        if (step.locked) {
-            need(ctx.locked, `Encountered ':' in unlocked subpath`)
-            need((lib._hexToArrayBuffer(meta)[31] & lib.FLAG_LOCK) !== 0, `Entry is not locked`)
-            ctx.locked = true
-        }
-        ctx.locked = step.locked
-    }
-    return { meta, data }
-}
-
-lib.walk2 = async (dmap, path) => {
     if (path.length > 0 && ![':', '.'].includes(path.charAt(0))) path = ':' + path
     let [meta, data] = await lib.get(dmap, '0x' + '00'.repeat(32))
     let ctx = { locked: path.charAt(0) === ':' }
@@ -225,3 +203,6 @@ lib._strToHex = str => {
 }
 
 lib.keccak256 = keccak256
+lib.abiEncode = (types, values) => { // why error out when assigned to defaultAbicoder.encode directly?
+    return defaultAbiCoder.encode(types, values)
+}

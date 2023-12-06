@@ -3,7 +3,6 @@ const dmap = require('./dmap.js')
 module.exports = utils = {}
 
 const makeRPC = async (url, method, params) => {
-    console.log("js,makeRPC:", url, method, params)
     let result = null
     try {
         const response = await fetch(url, {
@@ -55,7 +54,5 @@ const getFacade = async (customURL) => {
 }
 
 utils.RPCGetStorage = RPCGetStorage
-
 utils.makeRPC = makeRPC
-
 utils.getFacade = getFacade
