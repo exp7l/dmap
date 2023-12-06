@@ -17,7 +17,7 @@ contract AppraiserRoot {
             return 100e18;
         }
     }
-    
+
     function yield(address next) external {
         require(msg.sender == gov, "ERR_GOV");
         address _gov = gov;
