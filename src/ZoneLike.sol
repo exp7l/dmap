@@ -16,6 +16,8 @@ interface ZoneLike {
 
     function set(bytes32 name, bytes32 meta, bytes32 data) external;
 
+    function setMap(bytes32 name) external;
+
     function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value) external returns (bytes32 mapId);
 
     function abdicate(uint256 param) external;

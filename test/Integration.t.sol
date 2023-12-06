@@ -18,11 +18,12 @@ contract IntegrationTest is Test, Setup {
         freezone.assume(bytes32(uint256(426942)), namePlain);
         string memory keyPlain = "primary-wallet";
         bytes memory expectedValue = abi.encode("abc");
+        bytes32 name = keccak256(abi.encode(namePlain));
         uint8 typ = 7;
 
         ///// free.set 1 /////
-        bytes32 mapId = _setKey(freezone, namePlain, keyPlain, typ, expectedValue);
-
+        freezone.setMap(name);
+        bytes32 mapId = freezone.setKey(name, _key(keyPlain), typ, expectedValue);
         bytes32 physicalKey = keccak256(abi.encode(mapId, _key(keyPlain)));
         require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue));
         Key[] memory keys = emap.getKeys(mapId);
@@ -30,15 +31,13 @@ contract IntegrationTest is Test, Setup {
         require(keys[0].mapId == mapId);
         require(keys[0].typ == typ);
         require(keys[0].key == _key(keyPlain));
-
-        bytes32 name = keccak256(abi.encode(namePlain));
         bytes32 slot = keccak256(abi.encode(address(freezone), name));
         (bytes32 meta, bytes32 data) = dmap.get(slot);
         require(data == mapId);
 
         ///// free.set 2 /////
         bytes memory expectedValue2 = abi.encode("bcd");
-        _setKey(freezone, namePlain, keyPlain, typ, expectedValue2);
+        freezone.setKey(name, _key(keyPlain), typ, expectedValue2);
         require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue2));
         keys = emap.getKeys(mapId);
         require(keys.length == 2);
@@ -54,7 +53,7 @@ contract IntegrationTest is Test, Setup {
 
         ///// revert on set after lock /////
         vm.expectRevert(bytes("ERR_LOCKED"));
-        _setKey(freezone, namePlain, keyPlain, typ, expectedValue2);
+        freezone.setKey(name, _key(keyPlain), typ, expectedValue2);
     }
 
     function test_setKeyOwnership() external {
@@ -64,7 +63,9 @@ contract IntegrationTest is Test, Setup {
         string memory keyPlain = "primary-wallet";
         bytes memory expectedValue = abi.encode("abc");
         uint8 typ = 7;
-        bytes32 mapId = _setKey(freezone, namePlain, keyPlain, typ, expectedValue);
+        bytes32 name = keccak256(abi.encode(namePlain));
+        freezone.setMap(name);
+        bytes32 mapId = freezone.setKey(name, _key(keyPlain), typ, expectedValue);
 
         ///// only registry is allowed to set emap /////
         require(emap.owners(mapId) == address(freezone));
@@ -74,15 +75,6 @@ contract IntegrationTest is Test, Setup {
 
         vm.prank(address(freezone));
         emap.set(mapId, _key(keyPlain), typ, expectedValue);
-    }
-
-    function _setKey(ZoneLike zone, string memory namePlain, string memory keyPlain, uint8 typ, bytes memory value)
-        internal
-        returns (bytes32 mapId)
-    {
-        bytes32 name = keccak256(abi.encode(namePlain));
-        bytes24 key = _key(keyPlain);
-        mapId = zone.setKey(name, key, typ, value); // for typ tag, see EmapLike.sol
     }
 
     function _key(string memory keyPlain) internal pure returns (bytes24 key) {

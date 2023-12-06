@@ -64,19 +64,19 @@ contract Zone is ZoneLike {
         DmapLike(DMAP).set(name, meta, data);
     }
 
+    function setMap(bytes32 name) external {
+        bytes32 mapId = EmapLike(EMAP).getMapId();
+        uint256 refFlag = 1 << 1;
+        uint256 emap = uint256(uint160(EMAP)) << 8;
+        set(name, bytes32(emap | refFlag), mapId);
+    }
+
     function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value) external returns (bytes32 mapId) {
         require(owners[name] == msg.sender, "ERR_OWNER");
         bytes32 slot = keccak256(abi.encode(address(this), name));
         bytes32 meta;
         (meta, mapId) = DmapLike(DMAP).get(slot);
         require(uint256(meta) & 1 != LOCK, "ERR_LOCKED");
-        // set Dmap slot if it is empty
-        if (mapId == bytes32(0)) {
-            mapId = EmapLike(EMAP).getMapId();
-            uint256 refFlag = 1 << 1;
-            uint256 emap = uint160(EMAP) << 8;
-            set(name, bytes32(emap | refFlag), mapId);
-        }
         EmapLike(EMAP).set(mapId, key, typ, value);
     }
 
