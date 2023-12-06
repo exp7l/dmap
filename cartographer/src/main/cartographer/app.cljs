@@ -190,9 +190,9 @@
   [:div {:class (css {:font-family "monospace" :margin "0em 0.5em"})}
    [:div {:class $h1} "dmap"]
    [Dpath]
-   [Trace]
+   [Data]
    [Meta]
-   [Data]])
+   [Trace]])
 
 (dom/render [Application] (js/document.getElementById "app"))
 
