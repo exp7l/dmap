@@ -18,7 +18,7 @@ contract Setup {
     EmapLike emap;
     ZoneLike rootzone;
     ZoneLike freezone;
-    ZoneLike dappzone;
+    ZoneLike dmapzone;
     bytes32 constant LOCK = bytes32(uint256(1));
     bytes32 constant SALT = bytes32(uint256(42));
     uint256 constant FREQ = 120;
@@ -41,14 +41,14 @@ contract Setup {
         rootzone.configure(DMAP_PARAM, address(dmap));
 
         // deploy TLD dmpzone
-        dappzone = ZoneLike(address(new Zone("dappzone", gov, address(appraiserRoot), address(emap), FREQ)));
-        dappzone.configure(DMAP_PARAM, address(dmap));
+        dmapzone = ZoneLike(address(new Zone("dmapzone", gov, address(appraiserRoot), address(emap), FREQ)));
+        dmapzone.configure(DMAP_PARAM, address(dmap));
 
         // set and lock the dmapzone under the rootzone
-        plain = "dapp";
+        plain = "dmap";
         name = keccak256(abi.encode(plain));
         rootzone.assume(SALT, plain);
-        rootzone.set(name, LOCK, bytes32(bytes20(address(dappzone))));
+        rootzone.set(name, LOCK, bytes32(bytes20(address(dmapzone))));
         rootzone.transfer(name, gov);
 
         // deploy freezone
@@ -58,8 +58,8 @@ contract Setup {
         // set and lock the freezone under the dmpzone
         plain = "free";
         name = keccak256(abi.encode(plain));
-        dappzone.assume(SALT, plain);
-        dappzone.set(name, LOCK, bytes32(bytes20(address(freezone))));
-        dappzone.transfer(name, gov);
+        dmapzone.assume(SALT, plain);
+        dmapzone.set(name, LOCK, bytes32(bytes20(address(freezone))));
+        dmapzone.transfer(name, gov);
     }
 }
