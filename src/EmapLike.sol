@@ -16,7 +16,7 @@ interface EmapLike {
 
     function getKeys(bytes32 mapId) external view returns (Key[] memory);
 
-    function get(bytes32 physicalKey) external returns (bytes memory value);
+    function get(bytes32 physicalKey) external view returns (bytes memory value);
 
     function owners(bytes32 mapId) external returns (address owner);
 
