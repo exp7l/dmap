@@ -3,10 +3,14 @@ pragma solidity 0.8.13;
 
 interface ZoneLike {
     event Commit(bytes32 indexed comm, uint256 indexed value);
-    event Assume(bytes32 indexed name, string plain);
+    event Assume(address indexed sender, bytes32 indexed name, string plain);
     event Transfer(address indexed owner, address indexed recipient, bytes32 indexed name);
-    event Abdicate(uint256 indexed param);
-    event Configure(uint256 indexed param, address indexed data);
+    event Abdicate(address indexed gov, uint256 indexed param);
+    event Configure(address indexed gov, uint256 indexed param, address indexed data);
+    event Set(address indexed sender, bytes32 indexed name, bytes32 indexed meta, bytes32 data);
+    event RemoveKey(address indexed sender, bytes32 indexed name, bytes24 key);
+    event SetMap(address indexed sender, bytes32 indexed name);
+    event SetKey(address indexed sender, bytes32 indexed name); 
 
     function commit(bytes32 comm) external payable;
 
@@ -19,6 +23,8 @@ interface ZoneLike {
     function setMap(bytes32 name) external;
 
     function setKey(bytes32 name, bytes24 key, uint8 typ, bytes calldata value) external returns (bytes32 mapId);
+
+    function removeKey(bytes32 name, bytes24 key) external;
 
     function abdicate(uint256 param) external;
 

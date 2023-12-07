@@ -50,7 +50,7 @@ contract Zone is ZoneLike {
         require(commitments[comm] >= appraisal, "ERR_PAYMENT");
         commitments[comm] = 0;
         owners[name] = msg.sender;
-        emit Assume(name, plain);
+        emit Assume(msg.sender, name, plain);
     }
 
     function transfer(bytes32 name, address recipient) external {
@@ -61,6 +61,7 @@ contract Zone is ZoneLike {
 
     function set(bytes32 name, bytes32 meta, bytes32 data) public {
         require(owners[name] == msg.sender, "ERR_OWNER");
+        emit Set(msg.sender, name, meta, data);
         DmapLike(DMAP).set(name, meta, data);
     }
 
@@ -68,6 +69,7 @@ contract Zone is ZoneLike {
         bytes32 mapId = EmapLike(EMAP).getMapId();
         uint256 refFlag = 1 << 1;
         uint256 emap = uint256(uint160(EMAP)) << 8;
+        emit SetMap(msg.sender, name);
         set(name, bytes32(emap | refFlag), mapId);
     }
 
@@ -77,13 +79,23 @@ contract Zone is ZoneLike {
         bytes32 meta;
         (meta, mapId) = DmapLike(DMAP).get(slot);
         require(uint256(meta) & 1 != LOCK, "ERR_LOCKED");
+        emit SetKey(msg.sender, name);
         EmapLike(EMAP).set(mapId, key, typ, value);
+    }
+
+    function removeKey(bytes32 name, bytes24 key) external {
+        require(owners[name] == msg.sender, "ERR_OWNER");
+        bytes32 slot = keccak256(abi.encode(address(this), name));
+        (bytes32 meta, bytes32 mapId) = DmapLike(DMAP).get(slot);
+        require(uint256(meta) & 1 != LOCK, "ERR_LOCKED");
+        emit RemoveKey(msg.sender, name, key);
+        EmapLike(EMAP).remove(mapId, key);
     }
 
     function abdicate(uint256 param) external {
         require(msg.sender == gov, "ERR_GOV");
         abdicated[param] = true;
-        emit Abdicate(param);
+        emit Abdicate(msg.sender, param);
     }
 
     function configure(uint256 param, address addr) external {
@@ -100,6 +112,6 @@ contract Zone is ZoneLike {
         } else {
             revert("ERR_PARAM");
         }
-        emit Configure(param, addr);
+        emit Configure(msg.sender, param, addr);
     }
 }

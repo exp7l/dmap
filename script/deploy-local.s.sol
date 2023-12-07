@@ -9,8 +9,7 @@ contract DeployerLocal is Deployer {
     function run() public override {
         super.run();
 
-        vm.startBroadcast();
-
+        vm.startBroadcast(sk);
         string memory namePlain = "vitalik";
         // salt does not matter because appraisal is 0
         freezone.assume(bytes32(uint256(426942)), namePlain);

@@ -21,6 +21,7 @@
 (defn parsed-meta [meta]
   ;; standard #1: the least significant bit denotes whether the slot is lock
   ;; standard #2: the 2nd least significant bit denotes whether `data` is a reference
+  ;; standard #3: the most significant 31 bytes for a leaf gives the Emap address to resolve the map ID, if `data` is a map ID
   (-> {}
       (assoc :lock? (test-bit meta 0))
       (assoc :map? (test-bit meta 1))
@@ -33,3 +34,11 @@
                       4 "bytes32"
                       5 "bytes"
                       6 "string"})
+
+(defn decode-registry [trace]
+  (let [len (count trace)
+        idx (- len 2)
+        pair (nth trace idx)
+        registry (second pair)
+        decoded (subs registry 0 (+ 2 (* 20 2)))]
+    decoded))

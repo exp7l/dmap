@@ -20,23 +20,34 @@
 (defonce leaf (r/atom nil))
 (defonce leaf-kvs (r/atom nil))
 (defonce trace (r/atom nil))
-(defonce provider (.getDefaultProvider ethers rpc))
+(defonce provider (r/atom (.getDefaultProvider ethers rpc)))
+(defonce signer (r/atom nil))
+(defonce wallet-address (r/atom nil))
 
-(defn emap-obj  [addr]
-  (ethers/Contract. addr abi/emap-abi provider))
+(defn emap-obj
+  ([] (emap-obj
+       (->> @leaf
+            (:meta)
+            (util/parsed-meta)
+            (:emap))))
+  ([addr] (ethers/Contract. addr abi/emap-abi @provider)))
+
+(defn zone-obj [addr]
+  (ethers/Contract. addr abi/zone-abi @signer))
 
 (defn fetch-kvs [emap-obj map-id key typ]
   (let [encoded (dmap/abiEncode #js ["bytes32" "bytes24"] #js [map-id key])
         physical-key (dmap/keccak256 encoded)]
     (js-await [bytes (.get emap-obj physical-key)]
               (println "debug 1: " typ)
-              (swap! leaf-kvs #(assoc % [key typ] bytes)))))
+              (swap! leaf-kvs #(assoc % [map-id key typ] bytes)))))
 
-(defn fetch-keys [emap-addr map-id map?]
-  #_{:clj-kondo/ignore [:unresolved-symbol]}
-  (if map?
+(defn fetch-keys [emap-addr map-id is-leaf-map?]
+  #_{:clj-kondo/ignore [:unresolved-symbol]} 
+  (if is-leaf-map?
     (let [emap-obj (emap-obj emap-addr)]
       (js-await [ks (.getKeys emap-obj map-id)]
+                (println "ks: ..." [emap-obj emap-addr map-id ks])
                 (doseq [key (js->clj ks)]
                   (fetch-kvs emap-obj map-id (second key) (first key)))))
     (swap! leaf-kvs (constantly nil))))
@@ -54,7 +65,9 @@
                         (let [data (.toHexString data-bn)
                               parsed-meta (util/parsed-meta meta-bn)]
                           (fetch-keys (:emap parsed-meta) data (:map? parsed-meta))))
-                      (catch err (println "fetch-name,err: " err)))))
+                      (catch err (do
+                                   (println "err: " (str err))
+                                   (js/alert "error: see console"))))))
 
 ;;;; state
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -71,7 +84,6 @@
                :font-weight "bold"
                :margin-top "1em"
                :margin-bottom "0.5em"}))
-(def $bold (css {:font-weight "bold"}))
 (def $input-btn (css {:text-align "center"
                       :padding-block "1px"
                       :padding-inline "6px"
@@ -81,7 +93,11 @@
 (def $input-text (css {:padding-inline "6px"
                        :border-width "medium"
                        :border-color "black"
-                       :border-radius "5px"}))
+                       :border-radius "5px"
+                       :font-size "1.5em"
+                       :width "20em"
+                       :height "2em"}))
+(def $section (css {:font-family "monospace" :margin "0em 1.5em"}))
 
 (defn Trace []
   [:div
@@ -117,7 +133,7 @@
                 (-> js/document
                     (.getElementById "dpath")
                     (.-value)))}
-    "get trace"]])
+    "get data"]])
 
 (defn Meta []
   [:div
@@ -133,51 +149,79 @@
 (defn Dmap []
   (if (some? @leaf)
     [:div
-     {:class (css {:margin-bottom "1em"})}
-     [:label {:class $h3}
-      "dmap view (single entry)"]
-     [:div {:class (css {:padding-top "0.5em"})}
-      (.toHexString (:data @leaf))
+     [:div
+      [:div
+       [:label {:class $h3} (.toHexString (:data @leaf))]
+       [:button {:class $input-btn} "set name"]
+       [:button {:class $input-btn} "set name to new map"]
+       [:button {:class $input-btn} "lock name"]]
       (if (-> (:meta @leaf)
               (util/parsed-meta)
               (:map?))
-        [:div "^^^ this is a map id, see its key-values below"])]]))
+        [:div "^^^ this is a map id, its entries below"])]]))
+
+(defn remove-entry [key-uuid]
+  #(let [key-node (js/document.getElementById key-uuid)
+         dpath (-> (js/document.getElementById "dpath")
+                   (.-value)
+                   (dmap/parse)
+                   (js->clj))
+         name-plain (-> dpath
+                        (last)
+                        (get "name"))
+         name (-> (dmap/abiEncode
+                   #js ["string"]
+                   #js [name-plain])
+                  (dmap/keccak256))
+         registry (.getAttribute key-node "registry")
+         key (.getAttribute key-node "keyinmap")]
+     (println "debug: " [registry name key])
+     (.removeKey (zone-obj registry) name key)))
 
 (defn KeyValue [kv]
-  (let [[[key typ] value] kv]
+  (let [[[map-id key typ] value] kv
+        decoded-key (util/decode-utf8 key)
+        decoded-value (.decode defaultAbiCoder
+                               #js [(util/typ-conventions typ)]
+                               value)
+        key-uuid (random-uuid)
+        value-uuid (random-uuid)]
     [:div
-     [:div {:class $h3}
-      "entry: "
-      "{"
-      "\"" (util/decode-utf8 key) "\""
-      " "
-      "\"" (.decode defaultAbiCoder #js [(util/typ-conventions typ)] value) "\""
-      "}"]
-     [:div [:label {:class $bold} "decoded type "] (util/typ-conventions typ)]
-     [:div [:label {:class $bold} "raw key "] key]
-     [:div {:class (css {:max-width "32em"
-                         :word-wrap "break-word"})}
-      [:label {:class $bold} "raw value "] value]]))
+     [:div
+      [:label
+       {:class $h3}
+       "\""
+       [:label {:id key-uuid
+                :mapid map-id
+                :keyinmap key
+                :registry (util/decode-registry @trace)}
+        decoded-key]
+       "\""
+       ", "
+       "\"" [:label {:id value-uuid :value value} decoded-value] "\""]
+      [:button {:class $input-btn :onClick (remove-entry key-uuid)} "remove entry"]
+      [:button {:class $input-btn} "set value"]]]))
 
 (defn KeyValues [kvs]
-  (into [:div]
-        (map #(vector
-               :div
-               {:class (css {:margin-top "0.75em"})}
-               (KeyValue %)))
-        kvs))
+  [:div
+   [:label {:class $h3} "{"]
+   (into [:div]
+         (map #(vector
+                :div
+                {:class (css {:margin-top "0.75em"})}
+                (KeyValue %)))
+         kvs)
+   [:label {:class $h3} "}"]
+   [:div {:class (css {:margin-top "2em"})}
+    [:button {:class (css {:text-align "center"
+                           :padding-block "1px"
+                           :padding-inline "6px"
+                           :border-color "black"
+                           :border-width "thin"})} "add new entry"]]])
 
 (defn Emap []
   (if (some? @leaf-kvs)
-    [:div
-     {:class (css {:margin-bottom "1em"})}
-     [:label {:class (css {:font-size "1.25em"
-                           :font-weight "bold"})}
-      "emap view (multi entries)"]
-     [:div {:class (css {:margin-top "0.5em"})}
-      [:label {:class $bold} "map ID "]
-      (.toHexString (:data @leaf))]
-     [:div {:class (css {:margin-top "1.5em"})} [KeyValues @leaf-kvs]]]
+    [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})} [KeyValues @leaf-kvs]]
     nil))
 
 (defn Data []
@@ -186,9 +230,37 @@
    [Dmap]
    [Emap]])
 
+
+
+(defn ConnecBtn []
+  [:button {:class (css {:margin-left "3em"
+                         :text-align "center"
+                         :padding-block "1px"
+                         :padding-inline "6px"
+                         :border-color "black"
+                         :border-width "thin"})
+            :onClick #(do (println "connect onclick!")
+                          (if (nil? (.-ethereum js/window))
+                            (js/alert "err: install wallet"))
+                          (swap! provider (fn [_]
+                                            (-> ethers
+                                                (.-providers)
+                                                (.-Web3Provider)
+                                                (new (.-ethereum js/window) "any"))))
+                          (js-await [_ (.send @provider "eth_requestAccounts" [])]
+                                    (js-await [wallet (.getAddress (.getSigner @provider))]
+                                              (swap! signer (constantly (.getSigner @provider)))
+                                              (swap! wallet-address (constantly wallet))))
+                          (println "wallet connected!"))}
+
+   (if (some? @wallet-address)
+     (concat "connected to " (subs @wallet-address 0 10) "...")
+     "connect")])
+
+
 (defn Application []
-  [:div {:class (css {:font-family "monospace" :margin "0em 0.5em"})}
-   [:div {:class $h1} "dmap"]
+  [:div {:class $section}
+   [:div [:label {:class $h1} "dmap"] [ConnecBtn]]
    [Dpath]
    [Data]
    [Meta]

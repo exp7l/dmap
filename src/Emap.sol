@@ -8,32 +8,45 @@ contract Emap is EmapLike {
     uint256 nonce;
     mapping(bytes32 => bytes) public get;
     mapping(bytes32 => Key[]) public getKey;
-    mapping(bytes32 => address) public owners;
-    mapping(uint256 => string) public typeAnnotations;
+    mapping(bytes32 => address) public owner;
+    mapping(uint256 => string) public typeConvention;
 
     constructor() {
-        typeAnnotations[0] = "bool";
-        typeAnnotations[1] = "uint256";
-        typeAnnotations[2] = "int256";
-        typeAnnotations[3] = "address";
-        typeAnnotations[4] = "bytes32";
-        typeAnnotations[5] = "bytes";
-        typeAnnotations[6] = "string";
+        typeConvention[0] = "bool";
+        typeConvention[1] = "uint256";
+        typeConvention[2] = "int256";
+        typeConvention[3] = "address";
+        typeConvention[4] = "bytes32";
+        typeConvention[5] = "bytes";
+        typeConvention[6] = "string";
     }
 
     function getMapId() external returns (bytes32 mapId) {
         mapId = keccak256(abi.encode(msg.sender, block.chainid, nonce++));
-        owners[mapId] = msg.sender;
+        owner[mapId] = msg.sender;
     }
 
     function set(bytes32 mapId, bytes24 key, uint8 typ, bytes calldata value) external {
-        require(msg.sender == owners[mapId], "ERR_OWNER");
+        require(msg.sender == owner[mapId], "ERR_OWNER");
         get[keccak256(abi.encode(mapId, key))] = value;
         getKey[mapId].push(Key({mapId: mapId, key: key, typ: typ}));
         emit Set(msg.sender, mapId, key, typ, value);
     }
 
-    function getKeys(bytes32 mapId) external view returns (Key[] memory) {
+    function remove(bytes32 mapId, bytes24 key) external {
+        require(msg.sender == owner[mapId], "ERR_OWNER");
+        Key[] storage keys = getKey[mapId];
+        for (uint256 i = 0; i < keys.length; i++) {
+            if (keys[i].key == key) {
+                keys[i] = keys[keys.length - 1];
+                keys.pop();
+            }
+            return;
+        }
+        revert("ERR_KEY");
+    }
+
+    function getKeys(bytes32 mapId) public view returns (Key[] memory) {
         return getKey[mapId];
     }
 }

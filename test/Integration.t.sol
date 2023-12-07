@@ -68,7 +68,7 @@ contract IntegrationTest is Test, Setup {
         bytes32 mapId = freezone.setKey(name, _key(keyPlain), typ, expectedValue);
 
         ///// only registry is allowed to set emap /////
-        require(emap.owners(mapId) == address(freezone));
+        require(emap.owner(mapId) == address(freezone));
 
         vm.expectRevert(bytes("ERR_OWNER"));
         emap.set(mapId, _key(keyPlain), typ, expectedValue);

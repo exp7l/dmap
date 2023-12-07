@@ -48,8 +48,8 @@ contract Setup {
         plain = "dmap";
         name = keccak256(abi.encode(plain));
         rootzone.assume(SALT, plain);
+        // follows dmap object encoding for the rootzone
         rootzone.set(name, LOCK, bytes32(bytes20(address(dmapzone))));
-        rootzone.transfer(name, gov);
 
         // deploy freezone
         freezone = ZoneLike(address(new Zone("freezone", gov, address(appraiserFree), address(emap), FREQ)));
@@ -60,6 +60,5 @@ contract Setup {
         name = keccak256(abi.encode(plain));
         dmapzone.assume(SALT, plain);
         dmapzone.set(name, LOCK, bytes32(bytes20(address(freezone))));
-        dmapzone.transfer(name, gov);
     }
 }
