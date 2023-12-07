@@ -4,7 +4,6 @@
             [shadow.cljs.modern :refer (js-await)]
             [cartographer.abi :as abi]
             [cartographer.util :as util]
-            [clojure.string :as cs]
             [shadow.css :refer (css)]
             ["./dmap.js" :as dmap]
             ["./dmain.js" :as dmain]
@@ -12,7 +11,6 @@
             ["@ethersproject/abi" :refer (defaultAbiCoder)]
             ["ethers" :as ethers]))
 
-(defn init [] (println "init"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; state
@@ -21,9 +19,27 @@
 (defonce leaf (r/atom nil))
 (defonce leaf-kvs (r/atom nil))
 (defonce trace (r/atom nil))
+;; default provider gives redundant providers
+;; https://docs.ethers.org/v5/api/providers/#providers-getDefaultProvider 
 (defonce provider (r/atom (.getDefaultProvider ethers rpc)))
 (defonce signer (r/atom nil))
 (defonce wallet-address (r/atom nil))
+
+;; load from persistent state to memory
+(defn init []
+
+  (if (some? (.-ethereum js/window))
+    ;; only web3 provider can connect to the provider injected into browser
+    (let [web3-provider (-> ethers
+                            (.-providers)
+                            (.-Web3Provider)
+                            (new (.-ethereum js/window)))
+          _signer (.getSigner web3-provider)]
+      #_{:clj-kondo/ignore [:unresolved-symbol]}
+      (js-await [_wallet-address (.getAddress _signer)]
+                (reset! signer _signer)
+                (reset! wallet-address _wallet-address))))
+  (println "init"))
 
 (defn emap-obj
   ([] (emap-obj
@@ -40,7 +56,6 @@
   (let [encoded (dmap/abiEncode #js ["bytes32" "bytes24"] #js [map-id key])
         physical-key (dmap/keccak256 encoded)]
     (js-await [bytes (.get emap-obj physical-key)]
-              (println "debug 1: " typ)
               (swap! leaf-kvs #(assoc % [map-id key typ] bytes)))))
 
 (defn fetch-keys [emap-addr map-id is-leaf-map?]
@@ -48,7 +63,6 @@
   (if is-leaf-map?
     (let [emap-obj (emap-obj emap-addr)]
       (js-await [ks (.getKeys emap-obj map-id)]
-                (println "ks: ..." [emap-obj emap-addr map-id ks])
                 (doseq [key (js->clj ks)]
                   (fetch-kvs emap-obj map-id (second key) (first key)))))
     (swap! leaf-kvs (constantly nil))))
@@ -72,6 +86,85 @@
 
 ;;;; state
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; onclick
+
+(defn new-entry-onclick []
+  (let [new-key (-> (.getElementById js/document "newkey")
+                    (.-value)
+                    (#(.solidityPack ethers/utils #js ["string"] #js [%]))
+                    (#(dmap/hexZeroPad % 24)))
+        new-typ (-> (.getElementById js/document "newtyp")
+                    (.-value))
+        new-val (-> (.getElementById js/document "newval")
+                    (.-value)
+                    (#(cond (not= new-typ "bool") (identity %)
+                            (= % "false") false
+                            (= % "true") true
+                            :else (throw (ExceptionInfo. "ERR_BOOL"))))
+                    (#(dmap/abiEncode #js [new-typ] #js [%])))
+        dpath (-> (js/document.getElementById "dpath")
+                  (.-value)
+                  (dmap/parse)
+                  (js->clj))
+        name-plain (-> dpath
+                       (last)
+                       (get "name"))
+        name (-> (dmap/abiEncode
+                  #js ["string"]
+                  #js [name-plain])
+                 (dmap/keccak256))
+        new-typnum (util/typ-number->typ-annotation new-typ)]
+    #_{:clj-kondo/ignore [:unresolved-symbol]}
+    (js-await [_ (.setKey
+                  (zone-obj (util/decode-registry @trace))
+                  name
+                  new-key
+                  new-typnum
+                  new-val)]
+              (println "async call done"))))
+
+(defn remove-entry-onclick [key-uuid]
+  #(let [key-node (js/document.getElementById key-uuid)
+         dpath (-> (js/document.getElementById "dpath")
+                   (.-value)
+                   (dmap/parse)
+                   (js->clj))
+         name-plain (-> dpath
+                        (last)
+                        (get "name"))
+         name (-> (dmap/abiEncode
+                   #js ["string"]
+                   #js [name-plain])
+                  (dmap/keccak256))
+         registry (.getAttribute key-node "registry")
+         key (.getAttribute key-node "keyinmap")]
+     (println "debug: " [registry name key])
+     (.removeKey (zone-obj registry) name key)))
+
+(defn connect-onclick []
+  #_{:clj-kondo/ignore [:redundant-do]}
+  (do (println "ConnectBtn: connect onclick!")
+      #_{:clj-kondo/ignore [:missing-else-branch]}
+      (if (nil? (.-ethereum js/window))
+        (js/alert "err: install wallet"))
+      #_(swap! provider (fn [_]
+                          (-> ethers
+                              (.-providers)
+                              (.-Web3Provider)
+                              (new (.-ethereum js/window) "any"))))
+      #_{:clj-kondo/ignore [:unresolved-symbol]}
+      (js-await [_ (.send @provider "eth_requestAccounts" [])]
+                #_{:clj-kondo/ignore [:unresolved-symbol]}
+                (js-await [wallet (.getAddress (.getSigner @provider))]
+                          (swap! signer (constantly (.getSigner @provider)))
+                          (swap! wallet-address (constantly wallet))))
+      (println "ConnectBtn: wallet connected!")))
+
+;;;; onclick
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; view
@@ -104,6 +197,7 @@
   [:div
    [:div {:class $h2} "resolution trace"]
    (into [:div {:class (css {:margin-bottom "2em"})}]
+         #_{:clj-kondo/ignore [:missing-else-branch]}
          (if (some? @trace)
            (->> @trace
                 (map
@@ -148,6 +242,7 @@
      nil)])
 
 (defn Dmap []
+  #_{:clj-kondo/ignore [:missing-else-branch]}
   (if (some? @leaf)
     [:div
      [:div
@@ -161,34 +256,15 @@
               (:map?))
         [:div "^^^ this is a map id, its entries below"])]]))
 
-(defn remove-entry [key-uuid]
-  #(let [key-node (js/document.getElementById key-uuid)
-         dpath (-> (js/document.getElementById "dpath")
-                   (.-value)
-                   (dmap/parse)
-                   (js->clj))
-         name-plain (-> dpath
-                        (last)
-                        (get "name"))
-         name (-> (dmap/abiEncode
-                   #js ["string"]
-                   #js [name-plain])
-                  (dmap/keccak256))
-         registry (.getAttribute key-node "registry")
-         key (.getAttribute key-node "keyinmap")]
-     (println "debug: " [registry name key])
-     (.removeKey (zone-obj registry) name key)))
-
 (defn KeyValue [kv]
   (let [[[map-id key typ] value] kv
         decoded-key (util/decode-utf8 key)
         decoded-value (->> value
-                          (.decode defaultAbiCoder #js [(util/typ-conventions typ)])
-                          (first)
-                          (str))
+                           (.decode defaultAbiCoder #js [(util/typ-conventions typ)])
+                           (first)
+                           (str))
         key-uuid (random-uuid)
         value-uuid (random-uuid)]
-    (println "decoded3: " [decoded-key decoded-value value])
     [:div
      [:div
       [:label {:class $h3}
@@ -201,46 +277,8 @@
        "\""
        " "
        "\"" [:label {:id value-uuid :value value}  decoded-value] "\""]
-      [:button {:class $input-btn :onClick (remove-entry key-uuid)} "remove entry"]
+      [:button {:class $input-btn :onClick (remove-entry-onclick key-uuid)} "remove entry"]
       [:button {:class $input-btn} "set value"]]]))
-
-(defn new-entry-onclick []
-  (let [new-key (-> (.getElementById js/document "newkey")
-                    (.-value)
-                    (#(.solidityPack ethers/utils #js ["string"] #js [%]))
-                    (#(dmap/hexZeroPad % 24)))
-        new-typ (-> (.getElementById js/document "newtyp")
-                    (.-value))
-        _ (println "new-entry-onlick: " [new-key])
-        new-val (-> (.getElementById js/document "newval")
-                    (.-value)
-                    (#(cond (not= new-typ "bool") (identity %)
-                            (= % "false") false
-                            (= % "true") true
-                            :else (throw (ExceptionInfo. "ERR_BOOL"))))
-                    (#(dmap/abiEncode #js [new-typ] #js [%])))
-        dpath (-> (js/document.getElementById "dpath")
-                  (.-value)
-                  (dmap/parse)
-                  (js->clj))
-        name-plain (-> dpath
-                       (last)
-                       (get "name"))
-        _ (println "new-entry-onlick: " [new-key new-val name-plain])
-        name (-> (dmap/abiEncode
-                  #js ["string"]
-                  #js [name-plain])
-                 (dmap/keccak256))
-        new-typnum (util/typ-number->typ-annotation new-typ)]
-    (println "new-entry-onlick: " [new-key new-val])
-    (js-await [_ (.setKey
-                  (zone-obj (util/decode-registry @trace))
-                  name
-                  new-key
-                  new-typnum
-                  new-val)]
-              (println "async call done"))
-    42))
 
 (defn KeyValues [kvs]
   [:div
@@ -259,8 +297,8 @@
                           :border-width "medium"
                           :border-color "black"
                           :border-radius "0.2em"})}]
-    [:select {:id "newtyp"
-              :class (css {:margin-left "0.5em"})}
+    [:select
+     {:id "newtyp" :class (css {:margin-left "0.5em"})}
      [:option "bool"]
      [:option "uint256"]
      [:option "int256"]
@@ -288,11 +326,10 @@
           "add new entry"]]])
 
 (defn Emap []
-  (if (and
-       (some? @leaf)
-       (-> (:meta @leaf)
-           (util/parsed-meta)
-           (:map?)))
+  (if (and (some? @leaf)
+           (-> (:meta @leaf)
+               (util/parsed-meta)
+               (:map?)))
     [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})}
      [:label {:class $h3} "{"]
      [KeyValues @leaf-kvs]
@@ -306,30 +343,16 @@
    [Emap]])
 
 (defn ConnectBtn []
-  [:button {:class (css {:margin-left "3em"
-                         :text-align "center"
-                         :padding-block "1px"
-                         :padding-inline "6px"
-                         :border-color "black"
-                         :border-width "thin"})
-            :onClick #(do (println "connect onclick!")
-                          (if (nil? (.-ethereum js/window))
-                            (js/alert "err: install wallet"))
-                          (swap! provider (fn [_]
-                                            (-> ethers
-                                                (.-providers)
-                                                (.-Web3Provider)
-                                                (new (.-ethereum js/window) "any"))))
-                          #_{:clj-kondo/ignore [:unresolved-symbol]}
-                          (js-await [_ (.send @provider "eth_requestAccounts" [])]
-                                    #_{:clj-kondo/ignore [:unresolved-symbol]}
-                                    (js-await [wallet (.getAddress (.getSigner @provider))]
-                                              (swap! signer (constantly (.getSigner @provider)))
-                                              (swap! wallet-address (constantly wallet))))
-                          (println "wallet connected!"))}
-
-   (if (some? @wallet-address)
-     (concat "connected to " (subs @wallet-address 0 10) "...")
+  [:button
+   {:class (css {:margin-left "3em"
+                 :text-align "center"
+                 :padding-block "1px"
+                 :padding-inline "6px"
+                 :border-color "black"
+                 :border-width "thin"})
+    :onClick connect-onclick}
+   (if (some? @signer)
+     (str "connected to " (subs @wallet-address 0 10) "...")
      "connect")])
 
 (defn Application []
