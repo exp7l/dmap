@@ -27,7 +27,6 @@
 
 ;; load from persistent state to memory
 (defn init []
-
   (if (some? (.-ethereum js/window))
     ;; only web3 provider can connect to the provider injected into browser
     (let [web3-provider (-> ethers
@@ -38,7 +37,8 @@
       #_{:clj-kondo/ignore [:unresolved-symbol]}
       (js-await [_wallet-address (.getAddress _signer)]
                 (reset! signer _signer)
-                (reset! wallet-address _wallet-address))))
+                (reset! wallet-address _wallet-address)
+                (catch err (println "init: getAddress not yet approved by user - " err)))))
   (println "init"))
 
 (defn emap-obj
@@ -150,17 +150,16 @@
       #_{:clj-kondo/ignore [:missing-else-branch]}
       (if (nil? (.-ethereum js/window))
         (js/alert "err: install wallet"))
-      #_(swap! provider (fn [_]
-                          (-> ethers
+      (let [web3-provider (-> ethers
                               (.-providers)
                               (.-Web3Provider)
-                              (new (.-ethereum js/window) "any"))))
-      #_{:clj-kondo/ignore [:unresolved-symbol]}
-      (js-await [_ (.send @provider "eth_requestAccounts" [])]
-                #_{:clj-kondo/ignore [:unresolved-symbol]}
-                (js-await [wallet (.getAddress (.getSigner @provider))]
-                          (swap! signer (constantly (.getSigner @provider)))
-                          (swap! wallet-address (constantly wallet))))
+                              (new (.-ethereum js/window)))]
+        #_{:clj-kondo/ignore [:unresolved-symbol]}
+        (js-await [_ (.send web3-provider "eth_requestAccounts" #js [])]
+                  (let [_signer (.getSigner web3-provider)]
+                    (js-await [_wallet-address (.getAddress _signer)]
+                              (reset! signer _signer)
+                              (reset! wallet-address _wallet-address)))))
       (println "ConnectBtn: wallet connected!")))
 
 ;;;; onclick
