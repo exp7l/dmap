@@ -202,7 +202,9 @@ lib._strToHex = str => {
     return codes.map(c => c.toString(16)).join('')
 }
 
+lib.hexlify = hexlify
 lib.keccak256 = keccak256
 lib.abiEncode = (types, values) => { // why error out when assigned to defaultAbicoder.encode directly?
     return defaultAbiCoder.encode(types, values)
 }
+lib.hexZeroPad = hexZeroPad

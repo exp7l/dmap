@@ -4,6 +4,7 @@
             [shadow.cljs.modern :refer (js-await)]
             [cartographer.abi :as abi]
             [cartographer.util :as util]
+            [clojure.string :as cs]
             [shadow.css :refer (css)]
             ["./dmap.js" :as dmap]
             ["./dmain.js" :as dmain]
@@ -43,7 +44,7 @@
               (swap! leaf-kvs #(assoc % [map-id key typ] bytes)))))
 
 (defn fetch-keys [emap-addr map-id is-leaf-map?]
-  #_{:clj-kondo/ignore [:unresolved-symbol]} 
+  #_{:clj-kondo/ignore [:unresolved-symbol]}
   (if is-leaf-map?
     (let [emap-obj (emap-obj emap-addr)]
       (js-await [ks (.getKeys emap-obj map-id)]
@@ -181,15 +182,16 @@
 (defn KeyValue [kv]
   (let [[[map-id key typ] value] kv
         decoded-key (util/decode-utf8 key)
-        decoded-value (.decode defaultAbiCoder
-                               #js [(util/typ-conventions typ)]
-                               value)
+        decoded-value (->> value
+                          (.decode defaultAbiCoder #js [(util/typ-conventions typ)])
+                          (first)
+                          (str))
         key-uuid (random-uuid)
         value-uuid (random-uuid)]
+    (println "decoded3: " [decoded-key decoded-value value])
     [:div
      [:div
-      [:label
-       {:class $h3}
+      [:label {:class $h3}
        "\""
        [:label {:id key-uuid
                 :mapid map-id
@@ -197,31 +199,104 @@
                 :registry (util/decode-registry @trace)}
         decoded-key]
        "\""
-       ", "
-       "\"" [:label {:id value-uuid :value value} decoded-value] "\""]
+       " "
+       "\"" [:label {:id value-uuid :value value}  decoded-value] "\""]
       [:button {:class $input-btn :onClick (remove-entry key-uuid)} "remove entry"]
       [:button {:class $input-btn} "set value"]]]))
 
+(defn new-entry-onclick []
+  (let [new-key (-> (.getElementById js/document "newkey")
+                    (.-value)
+                    (#(.solidityPack ethers/utils #js ["string"] #js [%]))
+                    (#(dmap/hexZeroPad % 24)))
+        new-typ (-> (.getElementById js/document "newtyp")
+                    (.-value))
+        _ (println "new-entry-onlick: " [new-key])
+        new-val (-> (.getElementById js/document "newval")
+                    (.-value)
+                    (#(cond (not= new-typ "bool") (identity %)
+                            (= % "false") false
+                            (= % "true") true
+                            :else (throw (ExceptionInfo. "ERR_BOOL"))))
+                    (#(dmap/abiEncode #js [new-typ] #js [%])))
+        dpath (-> (js/document.getElementById "dpath")
+                  (.-value)
+                  (dmap/parse)
+                  (js->clj))
+        name-plain (-> dpath
+                       (last)
+                       (get "name"))
+        _ (println "new-entry-onlick: " [new-key new-val name-plain])
+        name (-> (dmap/abiEncode
+                  #js ["string"]
+                  #js [name-plain])
+                 (dmap/keccak256))
+        new-typnum (util/typ-number->typ-annotation new-typ)]
+    (println "new-entry-onlick: " [new-key new-val])
+    (js-await [_ (.setKey
+                  (zone-obj (util/decode-registry @trace))
+                  name
+                  new-key
+                  new-typnum
+                  new-val)]
+              (println "async call done"))
+    42))
+
 (defn KeyValues [kvs]
   [:div
-   [:label {:class $h3} "{"]
    (into [:div]
          (map #(vector
                 :div
                 {:class (css {:margin-top "0.75em"})}
                 (KeyValue %)))
          kvs)
-   [:label {:class $h3} "}"]
    [:div {:class (css {:margin-top "2em"})}
-    [:button {:class (css {:text-align "center"
-                           :padding-block "1px"
-                           :padding-inline "6px"
-                           :border-color "black"
-                           :border-width "thin"})} "add new entry"]]])
+    [:input {:id "newkey"
+             :type "text"
+             :placeholder "my key"
+             :class (css {:margin-left "0.25em"
+                          :padding-inline "0.5em"
+                          :border-width "medium"
+                          :border-color "black"
+                          :border-radius "0.2em"})}]
+    [:select {:id "newtyp"
+              :class (css {:margin-left "0.5em"})}
+     [:option "bool"]
+     [:option "uint256"]
+     [:option "int256"]
+     [:option "address"]
+     [:option "bytes32"]
+     [:option "bytes"]
+     [:option "string"]]
+    [:input {:id "newval"
+             :type "text"
+             :placeholder "my value"
+             :class (css {:margin-left "0.25em"
+                          :padding-inline "0.5em"
+                          :border-width "medium"
+                          :border-color "black"
+                          :border-radius "0.2em"
+                          :width "25em"})}]]
+   [:div [:button {:class (css {:margin-left "0.25em"
+                                :margin-top "0.25em"
+                                :text-align "center"
+                                :padding-block "1px"
+                                :padding-inline "6px"
+                                :border-color "black"
+                                :border-width "thin"})
+                   :onClick new-entry-onclick}
+          "add new entry"]]])
 
 (defn Emap []
-  (if (some? @leaf-kvs)
-    [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})} [KeyValues @leaf-kvs]]
+  (if (and
+       (some? @leaf)
+       (-> (:meta @leaf)
+           (util/parsed-meta)
+           (:map?)))
+    [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})}
+     [:label {:class $h3} "{"]
+     [KeyValues @leaf-kvs]
+     [:label {:class $h3} "}"]]
     nil))
 
 (defn Data []
@@ -230,9 +305,7 @@
    [Dmap]
    [Emap]])
 
-
-
-(defn ConnecBtn []
+(defn ConnectBtn []
   [:button {:class (css {:margin-left "3em"
                          :text-align "center"
                          :padding-block "1px"
@@ -247,7 +320,9 @@
                                                 (.-providers)
                                                 (.-Web3Provider)
                                                 (new (.-ethereum js/window) "any"))))
+                          #_{:clj-kondo/ignore [:unresolved-symbol]}
                           (js-await [_ (.send @provider "eth_requestAccounts" [])]
+                                    #_{:clj-kondo/ignore [:unresolved-symbol]}
                                     (js-await [wallet (.getAddress (.getSigner @provider))]
                                               (swap! signer (constantly (.getSigner @provider)))
                                               (swap! wallet-address (constantly wallet))))
@@ -257,10 +332,9 @@
      (concat "connected to " (subs @wallet-address 0 10) "...")
      "connect")])
 
-
 (defn Application []
   [:div {:class $section}
-   [:div [:label {:class $h1} "dmap"] [ConnecBtn]]
+   [:div [:label {:class $h1} "dmap"] [ConnectBtn]]
    [Dpath]
    [Data]
    [Meta]

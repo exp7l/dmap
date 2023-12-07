@@ -35,6 +35,15 @@
                       5 "bytes"
                       6 "string"})
 
+(def typ-number->typ-annotation
+  {"bool" 0
+   "uint256" 1
+   "int256" 2
+   "address" 3
+   "bytes32" 4
+   "bytes" 5
+   "string" 6})
+
 (defn decode-registry [trace]
   (let [len (count trace)
         idx (- len 2)
