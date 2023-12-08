@@ -424,54 +424,61 @@
                 (KeyValue %)))
          kvs)])
 
+(defn MapView []
+  [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})}
+   [:label "{"]
+   [KeyValues @leaf-kvs]
+   [:label "}"]
+   [:div {:class (css {:margin-top "2em"})}
+    [:input {:id "newkey"
+             :type "text"
+             :placeholder "my key"
+             :value @newkey
+             :onChange #(reset! newkey (.-value (.getElementById js/document "newkey")))
+             :class (css {:margin-left "0.25em"
+                          :padding-inline "0.5em"
+                          :border-width "thin"
+                          :border-color "black"
+                          :border-radius "0.2em"})}]
+    [:select
+     {:id "newtyp" :class (css {:margin-left "0.5em"})}
+     [:option "bool"]
+     [:option "uint256"]
+     [:option "int256"]
+     [:option "address"]
+     [:option "bytes32"]
+     [:option "bytes"]
+     [:option "string"]]
+    [:input {:id "newval"
+             :type "text"
+             :placeholder "my value"
+             :value @newval
+             :onChange #(reset! newval (.-value (.getElementById js/document "newval")))
+             :class (css {:margin-left "0.25em"
+                          :padding-inline "0.5em"
+                          :border-width "thin"
+                          :border-color "black"
+                          :border-radius "0.2em"
+                          :width "25em"})}]]
+   [:div [:button {:class (css {:margin-left "0.25em"
+                                :margin-top "0.25em"
+                                :text-align "center"
+                                :padding-block "1px"
+                                :padding-inline "6px"
+                                :border-color "black"
+                                :border-width "thin"})
+                   :onClick new-entry-onclick}
+          "add"]]])
+
 (defn Emap []
   (if (and (some? @leaf)
            (-> (:meta @leaf)
                (:map?)))
-    [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})}
-     [:label "{"]
-     [KeyValues @leaf-kvs]
-     [:label "}"]
-     [:div {:class (css {:margin-top "2em"})}
-      [:input {:id "newkey"
-               :type "text"
-               :placeholder "my key"
-               :value @newkey
-               :onChange #(reset! newkey (.-value (.getElementById js/document "newkey")))
-               :class (css {:margin-left "0.25em"
-                            :padding-inline "0.5em"
-                            :border-width "thin"
-                            :border-color "black"
-                            :border-radius "0.2em"})}]
-      [:select
-       {:id "newtyp" :class (css {:margin-left "0.5em"})}
-       [:option "bool"]
-       [:option "uint256"]
-       [:option "int256"]
-       [:option "address"]
-       [:option "bytes32"]
-       [:option "bytes"]
-       [:option "string"]]
-      [:input {:id "newval"
-               :type "text"
-               :placeholder "my value"
-               :value @newval
-               :onChange #(reset! newval (.-value (.getElementById js/document "newval")))
-               :class (css {:margin-left "0.25em"
-                            :padding-inline "0.5em"
-                            :border-width "thin"
-                            :border-color "black"
-                            :border-radius "0.2em"
-                            :width "25em"})}]]
-     [:div [:button {:class (css {:margin-left "0.25em"
-                                  :margin-top "0.25em"
-                                  :text-align "center"
-                                  :padding-block "1px"
-                                  :padding-inline "6px"
-                                  :border-color "black"
-                                  :border-width "thin"})
-                     :onClick new-entry-onclick}
-            "add"]]]
+    (let [mapview-id "mapviewid"]
+      [:div
+       [:label {:class $h2} "map view"]
+       [VisibilityToggle mapview-id]
+       [:div {"id" mapview-id :style {:display "none"}} [MapView]]])
     nil))
 
 (defn Data []
