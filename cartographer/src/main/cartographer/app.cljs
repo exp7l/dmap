@@ -4,6 +4,7 @@
             [shadow.cljs.modern :refer (js-await)]
             [cartographer.abi :as abi]
             [cartographer.util :as util]
+            [alandipert.storage-atom :refer [local-storage]]
             [shadow.css :refer (css)]
             ["./dmap.js" :as dmap]
             ["./dmain.js" :as dmain]
@@ -16,17 +17,23 @@
 ;;;; state
 
 (defonce rpc "http://127.0.0.1:8545")
-(defonce leaf (r/atom nil))
-(defonce leaf-kvs (r/atom nil))
-(defonce trace (r/atom nil))
+(defonce leaf  (local-storage (r/atom nil) :leaf))
+(defonce leaf-kvs (local-storage (r/atom nil) :leaf-kvs))
+(defonce trace (local-storage (r/atom nil) :trace))
 ;; default provider gives redundant providers
 ;; https://docs.ethers.org/v5/api/providers/#providers-getDefaultProvider 
 (defonce provider (r/atom (.getDefaultProvider ethers rpc)))
 (defonce signer (r/atom nil))
 (defonce wallet-address (r/atom nil))
 
+(defonce dpath (local-storage (r/atom nil) :dpath))
+(defonce newkey (local-storage (r/atom nil) :newkey))
+(defonce newval (local-storage (r/atom nil) :newval))
+
 ;; load from persistent state to memory
+#_{:clj-kondo/ignore [:clojure-lsp/unused-public-var]}
 (defn init []
+  #_{:clj-kondo/ignore [:missing-else-branch]}
   (if (some? (.-ethereum js/window))
     ;; only web3 provider can connect to the provider injected into browser
     (let [web3-provider (-> ethers
@@ -36,6 +43,7 @@
           _signer (.getSigner web3-provider)]
       #_{:clj-kondo/ignore [:unresolved-symbol]}
       (js-await [_wallet-address (.getAddress _signer)]
+                (println "signer created")
                 (reset! signer _signer)
                 (reset! wallet-address _wallet-address)
                 (catch err (println "init: getAddress not yet approved by user - " err)))))
@@ -45,7 +53,6 @@
   ([] (emap-obj
        (->> @leaf
             (:meta)
-            (util/parsed-meta)
             (:emap))))
   ([addr] (ethers/Contract. addr abi/emap-abi @provider)))
 
@@ -63,9 +70,11 @@
   (if is-leaf-map?
     (let [emap-obj (emap-obj emap-addr)]
       (js-await [ks (.getKeys emap-obj map-id)]
+                (println "fetch-keys,ks: " ks)
+                (reset! leaf-kvs {})
                 (doseq [key (js->clj ks)]
                   (fetch-kvs emap-obj map-id (second key) (first key)))))
-    (swap! leaf-kvs (constantly nil))))
+    (reset! leaf-kvs nil)))
 
 (defn fetch-name [rpc dpath]
   #_{:clj-kondo/ignore [:unresolved-symbol]}
@@ -73,16 +82,19 @@
             (js-await [_trace (dmap/walk facade dpath)]
                       (let [_trace (js->clj _trace)
                             meta-bn (.from BigNumber (first (last _trace)))
-                            data-bn (.from BigNumber (second (last _trace)))]
-                        (swap! trace (constantly _trace))
-                        (swap! leaf (constantly {:meta meta-bn
-                                                 :data data-bn}))
-                        (let [data (.toHexString data-bn)
-                              parsed-meta (util/parsed-meta meta-bn)]
-                          (fetch-keys (:emap parsed-meta) data (:map? parsed-meta))))
+                            data-bn (.from BigNumber (second (last _trace)))
+                            meta (util/parsed-meta meta-bn)]
+                        (reset! trace _trace)
+                        (reset! leaf {:meta meta
+                                      :data (.toHexString data-bn)})
+                        (let [data (.toHexString data-bn)]
+                          (fetch-keys (:emap meta) data (:map? meta))))
                       (catch err (do
                                    (println "err: " (str err))
                                    (js/alert "error: see console"))))))
+
+(defn refetch []
+  (fetch-name rpc (.-value (.getElementById js/document "dpath"))))
 
 ;;;; state
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -92,10 +104,21 @@
 ;;;; onclick
 
 (defn new-entry-onclick []
-  (let [new-key (-> (.getElementById js/document "newkey")
+  (println "new-entry-onclick: start")
+  (let [;; deploy script: bytes24(abi.encodePacked(keyPlain))
+        ;; key encoding must be the same as deploy script
+        new-key (-> (.getElementById js/document "newkey")
                     (.-value)
                     (#(.solidityPack ethers/utils #js ["string"] #js [%]))
-                    (#(dmap/hexZeroPad % 24)))
+                    ;; abi encode to right pad zeros
+                    (#(let [byte-count (/ (- (count %) 2) 2)]
+                        (if (> byte-count 24)
+                          (throw (ExceptionInfo. "ERR_BYTECOUNT_GREATER_THAN_24"))
+                          (dmap/abiEncode
+                           #js [(str "bytes" byte-count)]
+                           #js [%]))))
+                    ;; trim to 24 bytes
+                    (subs 0 (+ (* 24 2) 2)))
         new-typ (-> (.getElementById js/document "newtyp")
                     (.-value))
         new-val (-> (.getElementById js/document "newval")
@@ -117,14 +140,24 @@
                   #js [name-plain])
                  (dmap/keccak256))
         new-typnum (util/typ-number->typ-annotation new-typ)]
+    (println "new-entry-onclick: " [new-key
+                                    new-typ
+                                    new-val
+                                    dpath
+                                    name-plain
+                                    name
+                                    new-typnum])
     #_{:clj-kondo/ignore [:unresolved-symbol]}
-    (js-await [_ (.setKey
-                  (zone-obj (util/decode-registry @trace))
-                  name
-                  new-key
-                  new-typnum
-                  new-val)]
-              (println "async call done"))))
+    (js-await [tx-resp (.setKey
+                        (zone-obj (util/decode-registry @trace))
+                        name
+                        new-key
+                        new-typnum
+                        new-val)]
+              (println "setKey sent")
+              (js-await [tx-receipt (.wait tx-resp)]
+                        (println "setKey confirmed for 1 block")
+                        (refetch)))))
 
 (defn remove-entry-onclick [key-uuid]
   #(let [key-node (js/document.getElementById key-uuid)
@@ -142,7 +175,12 @@
          registry (.getAttribute key-node "registry")
          key (.getAttribute key-node "keyinmap")]
      (println "debug: " [registry name key])
-     (.removeKey (zone-obj registry) name key)))
+     #_{:clj-kondo/ignore [:unresolved-symbol]}
+     (js-await [tx-resp (.removeKey (zone-obj registry) name key)]
+               (println "removeKey sent")
+               (js-await [tx-receipt (.wait tx-resp)]
+                         (println "removeKey confirmed for 1 block")
+                         (refetch)))))
 
 (defn connect-onclick []
   #_{:clj-kondo/ignore [:redundant-do]}
@@ -219,7 +257,9 @@
    [:input {:type "text"
             :id "dpath"
             :placeholder ":dmap:free.vitalik"
-            :class $input-text}]
+            :class $input-text
+            :value @dpath
+            :onChange #(reset! dpath (.-value (.getElementById js/document "dpath")))}]
    [:button
     {:class $input-btn
      :onClick #(fetch-name
@@ -233,11 +273,11 @@
   [:div
    [:div {:class $h2} "meta"]
    (if (some? @leaf)
-     (let [parsed (util/parsed-meta (:meta @leaf))]
+     (let [meta (:meta @leaf)]
        [:div
-        [:div "lock " (str (:lock? parsed))]
-        [:div "map " (str (:map? parsed))]
-        [:div "emap address " (str (:emap parsed))]])
+        [:div "lock " (str (:lock? meta))]
+        [:div "map " (str (:map? meta))]
+        [:div "emap address " (str (:emap meta))]])
      nil)])
 
 (defn Dmap []
@@ -246,17 +286,17 @@
     [:div
      [:div
       [:div
-       [:label {:class $h3} (.toHexString (:data @leaf))]
+       [:label {:class $h3} (:data @leaf)]
        [:button {:class $input-btn} "set name"]
        [:button {:class $input-btn} "set name to new map"]
        [:button {:class $input-btn} "lock name"]]
       (if (-> (:meta @leaf)
-              (util/parsed-meta)
               (:map?))
         [:div "^^^ this is a map id, its entries below"])]]))
 
 (defn KeyValue [kv]
   (let [[[map-id key typ] value] kv
+        _ (println "KeyValue: " [map-id key typ value])
         decoded-key (util/decode-utf8 key)
         decoded-value (->> value
                            (.decode defaultAbiCoder #js [(util/typ-conventions typ)])
@@ -276,8 +316,7 @@
        "\""
        " "
        "\"" [:label {:id value-uuid :value value}  decoded-value] "\""]
-      [:button {:class $input-btn :onClick (remove-entry-onclick key-uuid)} "remove entry"]
-      [:button {:class $input-btn} "set value"]]]))
+      [:button {:class $input-btn :onClick (remove-entry-onclick key-uuid)} "remove entry"]]]))
 
 (defn KeyValues [kvs]
   [:div
@@ -286,53 +325,56 @@
                 :div
                 {:class (css {:margin-top "0.75em"})}
                 (KeyValue %)))
-         kvs)
-   [:div {:class (css {:margin-top "2em"})}
-    [:input {:id "newkey"
-             :type "text"
-             :placeholder "my key"
-             :class (css {:margin-left "0.25em"
-                          :padding-inline "0.5em"
-                          :border-width "medium"
-                          :border-color "black"
-                          :border-radius "0.2em"})}]
-    [:select
-     {:id "newtyp" :class (css {:margin-left "0.5em"})}
-     [:option "bool"]
-     [:option "uint256"]
-     [:option "int256"]
-     [:option "address"]
-     [:option "bytes32"]
-     [:option "bytes"]
-     [:option "string"]]
-    [:input {:id "newval"
-             :type "text"
-             :placeholder "my value"
-             :class (css {:margin-left "0.25em"
-                          :padding-inline "0.5em"
-                          :border-width "medium"
-                          :border-color "black"
-                          :border-radius "0.2em"
-                          :width "25em"})}]]
-   [:div [:button {:class (css {:margin-left "0.25em"
-                                :margin-top "0.25em"
-                                :text-align "center"
-                                :padding-block "1px"
-                                :padding-inline "6px"
-                                :border-color "black"
-                                :border-width "thin"})
-                   :onClick new-entry-onclick}
-          "add new entry"]]])
+         kvs)])
 
 (defn Emap []
   (if (and (some? @leaf)
            (-> (:meta @leaf)
-               (util/parsed-meta)
                (:map?)))
     [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})}
      [:label {:class $h3} "{"]
      [KeyValues @leaf-kvs]
-     [:label {:class $h3} "}"]]
+     [:label {:class $h3} "}"]
+     [:div {:class (css {:margin-top "2em"})}
+      [:input {:id "newkey"
+               :type "text"
+               :placeholder "my key"
+               :value @newkey
+               :onChange #(reset! newkey (.-value (.getElementById js/document "newkey")))
+               :class (css {:margin-left "0.25em"
+                            :padding-inline "0.5em"
+                            :border-width "medium"
+                            :border-color "black"
+                            :border-radius "0.2em"})}]
+      [:select
+       {:id "newtyp" :class (css {:margin-left "0.5em"})}
+       [:option "bool"]
+       [:option "uint256"]
+       [:option "int256"]
+       [:option "address"]
+       [:option "bytes32"]
+       [:option "bytes"]
+       [:option "string"]]
+      [:input {:id "newval"
+               :type "text"
+               :placeholder "my value"
+               :value @newval
+               :onChange #(reset! newval (.-value (.getElementById js/document "newval")))
+               :class (css {:margin-left "0.25em"
+                            :padding-inline "0.5em"
+                            :border-width "medium"
+                            :border-color "black"
+                            :border-radius "0.2em"
+                            :width "25em"})}]]
+     [:div [:button {:class (css {:margin-left "0.25em"
+                                  :margin-top "0.25em"
+                                  :text-align "center"
+                                  :padding-block "1px"
+                                  :padding-inline "6px"
+                                  :border-color "black"
+                                  :border-width "thin"})
+                     :onClick new-entry-onclick}
+            "add new entry"]]]
     nil))
 
 (defn Data []

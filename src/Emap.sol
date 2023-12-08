@@ -34,14 +34,16 @@ contract Emap is EmapLike {
     ) external {
         require(msg.sender == owner[mapId], "ERR_OWNER");
         bytes32 physicalKey = keccak256(abi.encode(mapId, key));
-        if (get[physicalKey].length == 0) {
-            getKey[mapId].push(Key({mapId: mapId, key: key, typ: typ}));
+         // allows overwrite therefore key writing are first-in-first-out
+        if (get[physicalKey].length != 0) {  
+            remove(mapId, key);
         }
+        getKey[mapId].push(Key({mapId: mapId, key: key, typ: typ}));
         get[physicalKey] = value;
         emit Set(msg.sender, mapId, key, typ, value);
     }
 
-    function remove(bytes32 mapId, bytes24 key) external {
+    function remove(bytes32 mapId, bytes24 key) public {
         require(msg.sender == owner[mapId], "ERR_OWNER");
         bytes32 physicalKey = keccak256(abi.encode(mapId, key));
         delete get[physicalKey];
@@ -50,8 +52,8 @@ contract Emap is EmapLike {
             if (keys[i].key == key) {
                 keys[i] = keys[keys.length - 1];
                 keys.pop();
+                return;
             }
-            return;
         }
         revert("ERR_KEY");
     }

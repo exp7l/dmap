@@ -6,7 +6,8 @@
 
  :dependencies
  [[reagent "1.1.0"]
-  [com.thheller/shadow-css "0.4.4"]]
+  [com.thheller/shadow-css "0.4.4"]
+  [alandipert/storage-atom "1.2.4"]]
 
  :dev-http {8001 "public"}
 

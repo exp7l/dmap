@@ -35,6 +35,7 @@ contract DeployerLocal is Deployer {
     function _key(string memory keyPlain) internal pure returns (bytes24 key) {
         // note that non-standarded encoding, we need it because standard encoding is too wide
         // will truncate if the string is longer than 24 bytes
+        // this needs to be the same as other clients'
         key = bytes24(abi.encodePacked(keyPlain));
     }
 }
