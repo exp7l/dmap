@@ -200,6 +200,25 @@
                               (reset! wallet-address _wallet-address)))))
       (println "ConnectBtn: wallet connected!")))
 
+(defn new-map-onclick [registry dpath]
+  (fn []
+    (let [name (-> dpath
+                   (dmap/parse)
+                   (js->clj)
+                   (last)
+                   (get "name")
+                   (#(dmap/abiEncode
+                      #js ["string"]
+                      #js [%]))
+                   (dmap/keccak256))
+          zone-obj (zone-obj registry)]
+      #_{:clj-kondo/ignore [:unresolved-symbol]}
+      (js-await [tx-resp (.setMap zone-obj name)]
+                (println "tx sent")
+                (js-await [tx-receipt (.wait tx-resp)]
+                          (println "tx confirmed for 1 block")
+                          (refetch))))))
+
 ;;;; onclick
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -211,10 +230,6 @@
                :font-weight "bold"
                :margin-top "1em"
                :margin-bottom "0.5em"}))
-(def $h3 (css {:font-size "1.25em"
-               :font-weight "bold"
-               :margin-top "1em"
-               :margin-bottom "0.5em"}))
 (def $input-btn (css {:text-align "center"
                       :padding-block "1px"
                       :padding-inline "6px"
@@ -222,34 +237,46 @@
                       :border-width "thin"
                       :margin-left "1em"}))
 (def $input-text (css {:padding-inline "6px"
-                       :border-width "medium"
+                       :border-width "thin"
                        :border-color "black"
                        :border-radius "5px"
-                       :font-size "1.5em"
+                       :font-size "1.2em"
                        :width "20em"
                        :height "2em"}))
 (def $section (css {:font-family "monospace" :margin "0em 1.5em"}))
 
+(defn VisibilityToggle [node-id]
+  [:button {:onClick #(set! (->> node-id
+                                 (.getElementById js/document)
+                                 (.-style)
+                                 (.-display))
+                            (let [display (->> node-id
+                                               (.getElementById js/document)
+                                               (.-style)
+                                               (.-display))]
+                              (if (= display "none") "block" "none")))
+            :class $input-btn}
+   "show/hide"])
+
+(defn Step [step]
+  [:div "step"
+   [:div {:class (css {:margin-left "1em"})} "meta " (first step)]
+   [:div {:class (css {:margin-left "1em"})} "data " (second step)]])
+
 (defn Trace []
-  [:div
-   [:div {:class $h2} "resolution trace"]
-   (into [:div {:class (css {:margin-bottom "2em"})}]
-         #_{:clj-kondo/ignore [:missing-else-branch]}
-         (if (some? @trace)
-           (->> @trace
-                (map
-                 #(vector
-                   :div "step"
-                   [:div
-                    {:class (css {:margin-left "1em"})}
-                    "meta "
-                    (first %)]
-                   [:div
-                    {:class (css {:margin-left "1em"})}
-                    "data "
-                    (second %)])))))
-   [:div "dmap object address " dmap/address]
-   [:div "rpc " rpc]])
+  (let [trace-id "trace-data" 
+        data 
+        #_{:clj-kondo/ignore [:missing-else-branch]}
+        (if (some? @trace) (into [:div] (map Step @trace)))]
+    [:div
+     [:div [:label {:class $h2} "resolution trace"] [VisibilityToggle trace-id]]
+     (conj
+      [:div {:class (css {:margin-bottom "2em"})
+             :style {:display "none"}
+             :id trace-id}
+       [:div "dmap object address " dmap/address]
+       [:div "rpc " rpc]]
+      data)]))
 
 (defn Dpath []
   [:div
@@ -267,18 +294,19 @@
                 (-> js/document
                     (.getElementById "dpath")
                     (.-value)))}
-    "get data"]])
+    "get"]
+   [:button {:class $input-btn} "assume ownership"]])
 
 (defn Meta []
-  [:div
-   [:div {:class $h2} "meta"]
-   (if (some? @leaf)
-     (let [meta (:meta @leaf)]
-       [:div
+  (let [meta (:meta @leaf)
+        meta-id "meta-data"]
+    [:div 
+     [:div [:label {:class $h2} "meta"] [VisibilityToggle meta-id]]
+     (if (some? @leaf)
+       [:div {:id meta-id :style {:display "none"}}
         [:div "lock " (str (:lock? meta))]
         [:div "map " (str (:map? meta))]
-        [:div "emap address " (str (:emap meta))]])
-     nil)])
+        [:div "emap address " (str (:emap meta))]])]))
 
 (defn Dmap []
   #_{:clj-kondo/ignore [:missing-else-branch]}
@@ -286,10 +314,14 @@
     [:div
      [:div
       [:div
-       [:label {:class $h3} (:data @leaf)]
-       [:button {:class $input-btn} "set name"]
-       [:button {:class $input-btn} "set name to new map"]
-       [:button {:class $input-btn} "lock name"]]
+       [:label (:data @leaf)]
+       [:button {:class $input-btn} "set"]
+       [:button {:class $input-btn
+                 :onClick (new-map-onclick
+                           (util/decode-registry @trace)
+                           @dpath)}
+        "set to new map"]
+       [:button {:class $input-btn} "lock"]]
       (if (-> (:meta @leaf)
               (:map?))
         [:div "^^^ this is a map id, its entries below"])]]))
@@ -306,7 +338,7 @@
         value-uuid (random-uuid)]
     [:div
      [:div
-      [:label {:class $h3}
+      [:label
        "\""
        [:label {:id key-uuid
                 :mapid map-id
@@ -316,7 +348,7 @@
        "\""
        " "
        "\"" [:label {:id value-uuid :value value}  decoded-value] "\""]
-      [:button {:class $input-btn :onClick (remove-entry-onclick key-uuid)} "remove entry"]]]))
+      [:button {:class $input-btn :onClick (remove-entry-onclick key-uuid)} "remove"]]]))
 
 (defn KeyValues [kvs]
   [:div
@@ -332,9 +364,9 @@
            (-> (:meta @leaf)
                (:map?)))
     [:div {:class (css {:margin-bottom "1em" :margin-top "1em"})}
-     [:label {:class $h3} "{"]
+     [:label "{"]
      [KeyValues @leaf-kvs]
-     [:label {:class $h3} "}"]
+     [:label "}"]
      [:div {:class (css {:margin-top "2em"})}
       [:input {:id "newkey"
                :type "text"
@@ -343,7 +375,7 @@
                :onChange #(reset! newkey (.-value (.getElementById js/document "newkey")))
                :class (css {:margin-left "0.25em"
                             :padding-inline "0.5em"
-                            :border-width "medium"
+                            :border-width "thin"
                             :border-color "black"
                             :border-radius "0.2em"})}]
       [:select
@@ -362,7 +394,7 @@
                :onChange #(reset! newval (.-value (.getElementById js/document "newval")))
                :class (css {:margin-left "0.25em"
                             :padding-inline "0.5em"
-                            :border-width "medium"
+                            :border-width "thin"
                             :border-color "black"
                             :border-radius "0.2em"
                             :width "25em"})}]]
@@ -374,7 +406,7 @@
                                   :border-color "black"
                                   :border-width "thin"})
                      :onClick new-entry-onclick}
-            "add new entry"]]]
+            "add"]]]
     nil))
 
 (defn Data []
