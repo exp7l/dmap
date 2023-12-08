@@ -85,7 +85,7 @@
                             meta-bn (.from BigNumber (first (last _trace)))
                             data-bn (.from BigNumber (second (last _trace)))
                             meta (assoc (util/parsed-meta meta-bn)
-                                        :hex (-> @trace
+                                        :hex (-> _trace
                                                  (last)
                                                  (first)))
                             _ (println "fetch-name, meta: " meta)]
