@@ -12,12 +12,13 @@
             ["@ethersproject/abi" :refer (defaultAbiCoder)]
             ["ethers" :as ethers]))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; state
 
 (defonce rpc "http://127.0.0.1:8545")
 (defonce leaf  (local-storage (r/atom nil) :leaf))
+(defonce meta-input (local-storage (r/atom nil) :meta-input))
+(defonce data-input (local-storage (r/atom nil) :data-input))
 (defonce leaf-kvs (local-storage (r/atom nil) :leaf-kvs))
 (defonce trace (local-storage (r/atom nil) :trace))
 ;; default provider gives redundant providers
@@ -83,10 +84,16 @@
                       (let [_trace (js->clj _trace)
                             meta-bn (.from BigNumber (first (last _trace)))
                             data-bn (.from BigNumber (second (last _trace)))
-                            meta (util/parsed-meta meta-bn)]
+                            meta (assoc (util/parsed-meta meta-bn)
+                                        :hex (-> @trace
+                                                 (last)
+                                                 (first)))
+                            _ (println "fetch-name, meta: " meta)]
                         (reset! trace _trace)
                         (reset! leaf {:meta meta
                                       :data (.toHexString data-bn)})
+                        (reset! data-input (.toHexString data-bn))
+                        (reset! meta-input (:hex meta))
                         (let [data (.toHexString data-bn)]
                           (fetch-keys (:emap meta) data (:map? meta))))
                       (catch err (do
@@ -202,22 +209,33 @@
 
 (defn new-map-onclick [registry dpath]
   (fn []
-    (let [name (-> dpath
-                   (dmap/parse)
-                   (js->clj)
-                   (last)
-                   (get "name")
-                   (#(dmap/abiEncode
-                      #js ["string"]
-                      #js [%]))
-                   (dmap/keccak256))
+    (let [name (util/dpath->name dpath)
           zone-obj (zone-obj registry)]
       #_{:clj-kondo/ignore [:unresolved-symbol]}
       (js-await [tx-resp (.setMap zone-obj name)]
                 (println "tx sent")
                 (js-await [tx-receipt (.wait tx-resp)]
                           (println "tx confirmed for 1 block")
-                          (refetch))))))
+                          (refetch))
+                (catch err (js/alert "err: the name is locked" (str err)))))))
+
+(defn data-set-onclick [meta-id data-id]
+  #(let [data (->> data-id
+                   (.getElementById js/document)
+                   (.-value))
+         meta (->> meta-id
+                   (.getElementById js/document)
+                   (.-value))
+         name (util/dpath->name @dpath)
+         registry (util/decode-registry @trace)
+         zone (zone-obj registry)]
+     #_{:clj-kondo/ignore [:unresolved-symbol]}
+     (js-await [tx-resp (.set zone name meta data)]
+               (println "tx sent")
+               (js-await [tx-receipt (.wait tx-resp)]
+                         (println "tx confirmed for 1 block")
+                         (refetch))
+               (catch err (js/alert "err: the name is locked" (str err))))))
 
 ;;;; onclick
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -264,8 +282,8 @@
    [:div {:class (css {:margin-left "1em"})} "data " (second step)]])
 
 (defn Trace []
-  (let [trace-id "trace-data" 
-        data 
+  (let [trace-id "trace-data"
+        data
         #_{:clj-kondo/ignore [:missing-else-branch]}
         (if (some? @trace) (into [:div] (map Step @trace)))]
     [:div
@@ -283,7 +301,6 @@
    [:div {:class $h2} "dpath"]
    [:input {:type "text"
             :id "dpath"
-            :placeholder ":dmap:free.vitalik"
             :class $input-text
             :value @dpath
             :onChange #(reset! dpath (.-value (.getElementById js/document "dpath")))}]
@@ -300,7 +317,7 @@
 (defn Meta []
   (let [meta (:meta @leaf)
         meta-id "meta-data"]
-    [:div 
+    [:div
      [:div [:label {:class $h2} "meta"] [VisibilityToggle meta-id]]
      (if (some? @leaf)
        [:div {:id meta-id :style {:display "none"}}
@@ -310,21 +327,53 @@
 
 (defn Dmap []
   #_{:clj-kondo/ignore [:missing-else-branch]}
-  (if (some? @leaf)
-    [:div
-     [:div
+  (println "Dmap: render starts")
+  (let [meta-id "metainput"
+        data-id "datainput"]
+    (if (some? @leaf)
       [:div
-       [:label (:data @leaf)]
-       [:button {:class $input-btn} "set"]
-       [:button {:class $input-btn
-                 :onClick (new-map-onclick
-                           (util/decode-registry @trace)
-                           @dpath)}
-        "set to new map"]
-       [:button {:class $input-btn} "lock"]]
-      (if (-> (:meta @leaf)
-              (:map?))
-        [:div "^^^ this is a map id, its entries below"])]]))
+       [:div
+        [:div
+         [:div {:class (css {:margin-bottom "0.25em"})}
+          [:label {:class (css {:margin-right "0.5em"})} "meta"]
+          [:input {:id meta-id
+                   :type "text"
+                   :value @meta-input
+                   :class (css {:padding-inline "6px"
+                                :border-width "thin"
+                                :border-color "black"
+                                :border-radius "5px"
+                                :font-size "1em"
+                                :width "45em"
+                                :height "2.25em"})
+                   :onChange #(reset! meta-input
+                                      (.-value
+                                       (.getElementById js/document meta-id)))}]]
+         [:div {:class (css {:margin-bottom "0.25em"})}
+          [:label {:class (css {:margin-right "0.5em"})} "data"]
+          [:input {:id data-id
+                   :type "text"
+                   :value @data-input
+                   :class (css {:padding-inline "6px"
+                                :border-width "thin"
+                                :border-color "black"
+                                :border-radius "5px"
+                                :font-size "1em"
+                                :width "45em"
+                                :height "2.25em"})
+                   :onChange #(reset! data-input
+                                      (.-value
+                                       (.getElementById js/document data-id)))}]]
+         [:button {:class $input-btn :onClick (data-set-onclick meta-id data-id)} "set"]
+         [:button {:class $input-btn
+                   :onClick (new-map-onclick
+                             (util/decode-registry @trace)
+                             @dpath)}
+          "set to new map"]
+         [:button {:class $input-btn} "lock"]]
+        (if (-> (:meta @leaf)
+                (:map?))
+          [:div "^^^ this is a map id, its entries below"])]])))
 
 (defn KeyValue [kv]
   (let [[[map-id key typ] value] kv
@@ -347,7 +396,7 @@
         decoded-key]
        "\""
        " "
-       "\"" [:label {:id value-uuid :value value}  decoded-value] "\""]
+       "\"" [:label {:id value-uuid :value value :typ typ}  decoded-value] "\""]
       [:button {:class $input-btn :onClick (remove-entry-onclick key-uuid)} "remove"]]]))
 
 (defn KeyValues [kvs]

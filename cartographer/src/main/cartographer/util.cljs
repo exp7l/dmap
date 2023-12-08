@@ -51,3 +51,14 @@
         registry (second pair)
         decoded (subs registry 0 (+ 2 (* 20 2)))]
     decoded))
+
+(defn dpath->name [dpath]
+  (-> dpath
+      (dmap/parse)
+      (js->clj)
+      (last)
+      (get "name")
+      (#(dmap/abiEncode
+         #js ["string"]
+         #js [%]))
+      (dmap/keccak256)))
