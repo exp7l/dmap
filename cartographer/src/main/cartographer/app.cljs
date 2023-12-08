@@ -219,23 +219,36 @@
                           (refetch))
                 (catch err (js/alert "err: the name is locked" (str err)))))))
 
-(defn data-set-onclick [meta-id data-id]
+(defn data-set-onclick [meta-id data-id & lock]
   #(let [data (->> data-id
                    (.getElementById js/document)
                    (.-value))
-         meta (->> meta-id
+         meta (->> meta-id #_"metainput"
                    (.getElementById js/document)
-                   (.-value))
+                   (.-value)
+                   ((fn [m]
+                      (if lock #_true
+                        (->> (.from BigNumber m)
+                             (.or (.from BigNumber 1))
+                             (.toHexString))
+                        (identity m))))
+                   ((fn [x] (subs x 2)))
+                   (str (.repeat "0" 64)) 
+                   ((fn [padded] (.slice padded -64)))
+                   (str "0x"))
          name (util/dpath->name @dpath)
          registry (util/decode-registry @trace)
          zone (zone-obj registry)]
+     (println "data-set-onclick: " [name meta data])
      #_{:clj-kondo/ignore [:unresolved-symbol]}
      (js-await [tx-resp (.set zone name meta data)]
                (println "tx sent")
                (js-await [tx-receipt (.wait tx-resp)]
                          (println "tx confirmed for 1 block")
                          (refetch))
-               (catch err (js/alert "err: the name is locked" (str err))))))
+               (catch err 
+                      (println "err: the name is locked" (str err))
+                      (js/alert "err: the name is locked" (str err))))))
 
 ;;;; onclick
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -248,6 +261,7 @@
                :font-weight "bold"
                :margin-top "1em"
                :margin-bottom "0.5em"}))
+
 (def $input-btn (css {:text-align "center"
                       :padding-block "1px"
                       :padding-inline "6px"
@@ -311,7 +325,7 @@
                 (-> js/document
                     (.getElementById "dpath")
                     (.-value)))}
-    "get"]
+    "get data"]
    [:button {:class $input-btn} "assume ownership"]])
 
 (defn Meta []
@@ -364,16 +378,18 @@
                    :onChange #(reset! data-input
                                       (.-value
                                        (.getElementById js/document data-id)))}]]
-         [:button {:class $input-btn :onClick (data-set-onclick meta-id data-id)} "set"]
+         [:button {:class (css {:text-align "center"
+                                :padding-block "1px"
+                                :padding-inline "6px"
+                                :border-color "black"
+                                :border-width "thin"})
+                   :onClick (data-set-onclick meta-id data-id)} "set"]
          [:button {:class $input-btn
                    :onClick (new-map-onclick
                              (util/decode-registry @trace)
                              @dpath)}
           "set to new map"]
-         [:button {:class $input-btn} "lock"]]
-        (if (-> (:meta @leaf)
-                (:map?))
-          [:div "^^^ this is a map id, its entries below"])]])))
+         [:button {:class $input-btn :onClick (data-set-onclick meta-id data-id true)} "lock"]]]])))
 
 (defn KeyValue [kv]
   (let [[[map-id key typ] value] kv
