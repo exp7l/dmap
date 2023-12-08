@@ -25,9 +25,9 @@ contract IntegrationTest is Test, Setup {
         freezone.setMap(name);
         bytes32 mapId = freezone.setKey(name, _key(keyPlain), typ, expectedValue);
         bytes32 physicalKey = keccak256(abi.encode(mapId, _key(keyPlain)));
-        require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue));
+        require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue), "ERR_VALUE_EQUALITY");
         Key[] memory keys = emap.getKeys(mapId);
-        require(keys.length == 1);
+        require(keys.length == 1, "ERR_KEYS_LEN");
         require(keys[0].mapId == mapId);
         require(keys[0].typ == typ);
         require(keys[0].key == _key(keyPlain));
@@ -40,13 +40,10 @@ contract IntegrationTest is Test, Setup {
         freezone.setKey(name, _key(keyPlain), typ, expectedValue2);
         require(keccak256(emap.get(physicalKey)) == keccak256(expectedValue2));
         keys = emap.getKeys(mapId);
-        require(keys.length == 2);
+        require(keys.length == 1);
         require(keys[0].mapId == mapId);
         require(keys[0].typ == typ);
         require(keys[0].key == _key(keyPlain));
-        require(keys[1].mapId == mapId);
-        require(keys[1].typ == typ);
-        require(keys[1].key == _key(keyPlain));
 
         ///// free.set 3 (lock) /////
         freezone.set(name, LOCK, mapId);
