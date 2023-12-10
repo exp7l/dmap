@@ -29,4 +29,6 @@ interface ZoneLike {
     function abdicate(uint256 param) external;
 
     function configure(uint256 param, address addr) external;
+
+    function owners(bytes32 name) external view returns (address owner);
 }

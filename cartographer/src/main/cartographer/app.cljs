@@ -19,6 +19,7 @@
 (defonce leaf  (local-storage (r/atom nil) :leaf))
 (defonce meta-input (local-storage (r/atom nil) :meta-input))
 (defonce data-input (local-storage (r/atom nil) :data-input))
+(defonce ownership-input (local-storage (r/atom nil) :ownership-input))
 (defonce leaf-kvs (local-storage (r/atom nil) :leaf-kvs))
 (defonce trace (local-storage (r/atom nil) :trace))
 ;; default provider gives redundant providers
@@ -58,7 +59,7 @@
   ([addr] (ethers/Contract. addr abi/emap-abi @provider)))
 
 (defn zone-obj [addr]
-  (ethers/Contract. addr abi/zone-abi @signer))
+  (ethers/Contract. addr abi/zone-abi (if (some? @signer) @signer @provider)))
 
 (defn fetch-kvs [emap-obj map-id key typ]
   (let [encoded (dmap/abiEncode #js ["bytes32" "bytes24"] #js [map-id key])
@@ -94,6 +95,13 @@
                                       :data (.toHexString data-bn)})
                         (reset! data-input (.toHexString data-bn))
                         (reset! meta-input (:hex meta))
+                        (js-await
+                         [owner (->> dpath
+                                     (util/dpath->name)
+                                     (.owners (zone-obj (util/decode-registry @trace))))]
+                         (println ".owners: " owner)
+                         (reset! ownership-input owner))
+
                         (let [data (.toHexString data-bn)]
                           (fetch-keys (:emap meta) data (:map? meta))))
                       (catch err (do
@@ -228,12 +236,12 @@
                    (.-value)
                    ((fn [m]
                       (if lock #_true
-                        (->> (.from BigNumber m)
-                             (.or (.from BigNumber 1))
-                             (.toHexString))
-                        (identity m))))
+                          (->> (.from BigNumber m)
+                               (.or (.from BigNumber 1))
+                               (.toHexString))
+                          (identity m))))
                    ((fn [x] (subs x 2)))
-                   (str (.repeat "0" 64)) 
+                   (str (.repeat "0" 64))
                    ((fn [padded] (.slice padded -64)))
                    (str "0x"))
          name (util/dpath->name @dpath)
@@ -246,9 +254,9 @@
                (js-await [tx-receipt (.wait tx-resp)]
                          (println "tx confirmed for 1 block")
                          (refetch))
-               (catch err 
+               (catch err
                       (println "err: the name is locked" (str err))
-                      (js/alert "err: the name is locked" (str err))))))
+                 (js/alert "err: the name is locked" (str err))))))
 
 ;;;; onclick
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -260,7 +268,7 @@
 (def $h2 (css {:font-size "1.5em"
                :font-weight "bold"
                :margin-top "1em"
-               :margin-bottom "0.5em"}))
+               :margin-bottom "0.5em"}))0x55cee7d486bc5cda74d566f41b801f78b21cbdc3b2ce9ce21c264a166892f6ad
 
 (def $input-btn (css {:text-align "center"
                       :padding-block "1px"
@@ -325,8 +333,7 @@
                 (-> js/document
                     (.getElementById "dpath")
                     (.-value)))}
-    "get data"]
-   [:button {:class $input-btn} "assume ownership"]])
+    "get data"]])
 
 (defn Meta []
   (let [meta (:meta @leaf)
@@ -500,15 +507,66 @@
      (str "connected to " (subs @wallet-address 0 10) "...")
      "connect")])
 
+(defn transfer-ownership-onclick []
+  (let [name (util/dpath->name @dpath)
+        registry (util/decode-registry @trace)
+        zone (zone-obj registry)]
+    (println "transfer-ownership: " [name @ownership-input])
+    (js-await [resp  (.transfer zone name @ownership-input)]
+              (println "transfer-ownership: tx sent")
+              (js-await [receipt (.wait resp)]
+                        (println "transfer-ownership: tx confirmed for 1 block")))))
+
+(defn PurchaseName []
+  [:div
+   [:div "commit"]
+   [:div "assume"]])
+
+(defn Ownership []
+  (let [node-id "ownership"
+        input-id "ownershipinput"]
+    [:div
+     [:div [:label {:class $h2} "ownership"] [VisibilityToggle node-id]]
+     [:div {:id node-id}
+      "ownership"
+      [:input {:type "text"
+               :id input-id
+               :class (css {:padding-inline "6px"
+                            :border-width "thin"
+                            :border-color "black"
+                            :border-radius "5px"
+                            :font-size "1em"
+                            :width "35em"
+                            :height "2.25em"
+                            :margin-left "0.25em"})
+               :value @ownership-input
+               :onChange #(reset!
+                           ownership-input
+                           (.-value
+                            (.getElementById
+                             js/document
+                             input-id)))}]
+      [:button {:class (css {:margin-left "0.25em"
+                             :margin-top "0.25em"
+                             :text-align "center"
+                             :padding-block "1px"
+                             :padding-inline "6px"
+                             :border-color "black"
+                             :border-width "thin"})
+                :onClick transfer-ownership-onclick}
+       "transfer to"]]
+       [PurchaseName]]))
+
 (defn Application []
   [:div {:class $section}
    [:div [:label {:class $h1} "dmap"] [ConnectBtn]]
    [Dpath]
    [Data]
+   [Ownership]
    [Meta]
    [Trace]])
 
 (dom/render [Application] (js/document.getElementById "app"))
 
 ;;;; view
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;
